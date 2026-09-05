@@ -41,6 +41,10 @@ function confirmButtonHtml(id, label, onConfirmCall, cls){
 function handleTeamNameSelect(team, value){
   if (team==='home') state.homeTeamName=value; else state.awayTeamName=value;
   loadRosterFromProfile(team);
+  // そのチーム名で前回使ったスタメンがあれば自動で復元する（無ければ空のまま）
+  state[team==='home'?'homeRotation':'awayRotation'] = [null,null,null,null,null,null];
+  state[team==='home'?'homeLiberoSelection':'awayLiberoSelection'] = [null,null];
+  applyLastLineupIfAvailable(team, value);
   render();
 }
 function handleTournamentSelect(value){

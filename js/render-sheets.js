@@ -380,16 +380,20 @@ function renderCsvTab(teamName){
       <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(label)}
     </label>`;
   }).join('') || '<p class="muted">まだ試合記録がありません</p>';
-  html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport(true,'${teamName.replace(/'/g,"\\'")}')">📁 フォルダに保存する</button>`;
-  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExport(false,'${teamName.replace(/'/g,"\\'")}')">個別にダウンロードする</button>`;
-  html += `<p class="muted" style="margin-top:8px;">「フォルダに保存する」はChrome/Edgeなど対応ブラウザで実際のフォルダに選手ごとのCSVをまとめて書き出せます。非対応の場合は自動的に個別ダウンロードになります。</p>`;
+  html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport('${teamName.replace(/'/g,"\\'")}')">📤 選手ごとのCSVを書き出す</button>`;
+  html += `<p class="muted" style="margin-top:8px;">iPad/iPhoneでは共有シートが開くので「ファイルに保存」からフォルダを選んで保存できます。対応していない環境では自動的にフォルダ選択、または個別ダウンロードに切り替わります。</p>`;
+  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExportDownloadOnly('${teamName.replace(/'/g,"\\'")}')">個別にダウンロードする（常にこの方法を使う）</button>`;
   return html;
 }
-function runCsvExport(toFolder, teamName){
+function runCsvExport(teamName){
   const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
   if (ids.length===0){ showToast('試合を選択してください'); return; }
-  if (toFolder) exportDetailedCSVToFolder(ids, teamName);
-  else exportDetailedCSV(ids, teamName);
+  exportDetailedCSVSmart(ids, teamName);
+}
+function runCsvExportDownloadOnly(teamName){
+  const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
+  if (ids.length===0){ showToast('試合を選択してください'); return; }
+  exportDetailedCSV(ids, teamName);
 }
 
 /* ==================== ランキング ==================== */
@@ -579,7 +583,7 @@ function deleteRosterPlayer(teamName, id){
 
 function renderGamePrepSheet(){
   let body = `<h3>登録チーム</h3>`;
-  body += state.knownTeamNames.map(name=>{
+  body += orderedTeamNames().map(name=>{
     if (state.editingTeamName===name){
       return `
       <div class="card" style="margin-bottom:8px;">

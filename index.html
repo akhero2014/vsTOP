@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>vsTOP</title>
+
+<!-- ===== PWA設定（iPadでホーム画面に追加してアプリのように使うための設定） ===== -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12213a">
+
+<!-- iOS/iPadOS Safari向け（Web App Manifestだけでは反映されないため個別に指定） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="vsTOP">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<!-- ===== ここまでPWA設定 ===== -->
+
 <style>
   :root{
     --navy:#12213a; --navy2:#1a2f52; --court:#d9a066; --court2:#c7935a;
@@ -189,5 +202,16 @@
 <script src="js/render-match.js"></script>
 <script src="js/render-sheets.js"></script>
 <script src="js/main.js"></script>
+<script>
+  // Service Workerの登録（オフラインでも起動できるようにする）。
+  // file://で直接開いた場合はService Workerが使えないため、その場合は静かにスキップする。
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {
+        // 登録に失敗しても通常のWebページとしては動作を継続する
+      });
+    });
+  }
+</script>
 </body>
 </html>

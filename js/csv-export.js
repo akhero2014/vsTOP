@@ -20,7 +20,7 @@ function simpleStatsCSV(rows, filename){
       r.block.decided,
     ].join(','));
   }
-  downloadText(lines.join('\n'), filename+'.csv');
+  shareOrSaveCsvFiles([{ filename: filename+'.csv', content: lines.join('\n') }]);
 }
 
 function downloadText(text, filename){
@@ -30,6 +30,62 @@ function downloadText(text, filename){
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* =====================================================================
+   CSVの保存方法について。
+   iPadOS Safari は File System Access API (showDirectoryPicker) に対応して
+   おらず、また <a download> + Blob URL の組み合わせも挙動が不安定なことが
+   知られている。そのため、iPadで最も確実に「ファイルに保存」できる方法として
+   Web Share API（navigator.share にファイルを渡し、共有シートから
+   「ファイルに保存」を選んでもらう）を最優先で使う。
+   1. Web Share API（files対応）… iPad/iPhoneのSafariで動作
+   2. File System Access API（showDirectoryPicker）… Chrome/Edge等のデスクトップ
+   3. 個別ダウンロード（<a download>）… 上記どちらも使えない場合の最終手段
+   ===================================================================== */
+
+async function shareOrSaveCsvFiles(fileSpecs, options){
+  options = options || {};
+  const allowFolderPicker = options.allowFolderPicker !== false;
+
+  if (fileSpecs.length===0){ showToast('出力できるデータがありません'); return; }
+
+  // 1. Web Share API
+  if (navigator.canShare){
+    try{
+      const files = fileSpecs.map(f => new File(["\uFEFF"+f.content], f.filename, {type:'text/csv'}));
+      if (navigator.canShare({ files })){
+        await navigator.share({ files });
+        showToast(files.length+'件のCSVを共有しました');
+        return;
+      }
+    }catch(err){
+      if (err && err.name==='AbortError') return; // 共有をキャンセルした場合は何もしない
+      // 共有に失敗した場合は次の方法へフォールバックする
+    }
+  }
+
+  // 2. File System Access API（対応ブラウザのみ）
+  if (allowFolderPicker && window.showDirectoryPicker){
+    try{
+      const dirHandle = await window.showDirectoryPicker();
+      for (const f of fileSpecs){
+        const fileHandle = await dirHandle.getFileHandle(f.filename, {create:true});
+        const writable = await fileHandle.createWritable();
+        await writable.write("\uFEFF"+f.content);
+        await writable.close();
+      }
+      showToast(fileSpecs.length+'件のCSVをフォルダに保存しました。');
+      return;
+    }catch(err){
+      if (err && err.name==='AbortError') return;
+      // フォルダ保存に失敗した場合は個別ダウンロードへフォールバックする
+    }
+  }
+
+  // 3. 個別ダウンロード（最終フォールバック）
+  fileSpecs.forEach(f => downloadText(f.content, f.filename));
+  showToast(fileSpecs.length>1 ? 'お使いの環境ではまとめて保存できないため、個別ファイルとしてダウンロードしました。' : 'ダウンロードしました。');
 }
 
 function detailedMatchCSV(match, playerName, side){
@@ -140,8 +196,19 @@ function buildPlayerCsvForMatches(matches, name, teamName){
   return body;
 }
 
-/// ブラウザがフォルダ保存に対応していない場合のフォールバック：1件ずつダウンロードする
+/// 選択した試合・チームについて、選手ごとのCSVをまとめて書き出す（保存方法は自動選択）
+async function exportDetailedCSVSmart(matchIds, teamName){
+  const matches = collectMatchesForExport(matchIds);
+  if (matches.length===0){ showToast('試合を選択してください'); return; }
+  const names = collectPlayerNamesForMatches(matches, teamName);
+  const fileSpecs = names.map(name => {
+    const body = buildPlayerCsvForMatches(matches, name, teamName);
+    return body ? { filename: name.replace(/[\/:]/g,'_')+'.csv', content: body } : null;
+  }).filter(Boolean);
+  await shareOrSaveCsvFiles(fileSpecs);
+}
 
+/// 常に個別ファイルとしてダウンロードしたい場合の明示的な選択肢
 function exportDetailedCSV(matchIds, teamName){
   const matches = collectMatchesForExport(matchIds);
   if (matches.length===0){ showToast('試合を選択してください'); return; }
@@ -150,39 +217,5 @@ function exportDetailedCSV(matchIds, teamName){
     const body = buildPlayerCsvForMatches(matches, name, teamName);
     if (body) downloadText(body, name.replace(/[\/:]/g,'_')+'.csv');
   });
-}
-
-/// File System Access API に対応したブラウザでは、実際にフォルダを選んでその中に
-/// 選手ごとのCSVをまとめて書き出す。未対応ブラウザでは自動的に個別ダウンロードにフォールバックする。
-
-async function exportDetailedCSVToFolder(matchIds, teamName){
-  const matches = collectMatchesForExport(matchIds);
-  if (matches.length===0){ showToast('試合を選択してください'); return; }
-
-  if (!window.showDirectoryPicker){
-    exportDetailedCSV(matchIds, teamName);
-    showToast('お使いのブラウザはフォルダへの直接保存に対応していないため、個別のファイルとしてダウンロードしました。');
-    return;
-  }
-
-  const names = collectPlayerNamesForMatches(matches, teamName);
-  try{
-    const dirHandle = await window.showDirectoryPicker();
-    let written = 0;
-    for (const name of names){
-      const body = buildPlayerCsvForMatches(matches, name, teamName);
-      if (!body) continue;
-      const fileHandle = await dirHandle.getFileHandle(name.replace(/[\/:]/g,'_')+'.csv', {create:true});
-      const writable = await fileHandle.createWritable();
-      await writable.write("\uFEFF"+body);
-      await writable.close();
-      written++;
-    }
-    showToast(written+'件のCSVをフォルダに保存しました。');
-  }catch(err){
-    if (err && err.name==='AbortError') return;
-    showToast('フォルダへの保存に失敗しました。個別ダウンロードに切り替えます。');
-    exportDetailedCSV(matchIds, teamName);
-  }
 }
 

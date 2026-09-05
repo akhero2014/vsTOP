@@ -79,4 +79,33 @@ function liberos(team){
 }
 function liberoSelection(team){ return team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection; }
 
+/* ---- チーム名ごとに、最後に使ったスタメン（ローテーション・リベロ）を記憶する ---- */
+
+/// 試合開始時に、そのチーム名の現在のスタメンを「最後に使ったスタメン」として保存する
+function saveLastLineupForTeamName(team, teamName){
+  if (!state.lastLineupByTeamName) state.lastLineupByTeamName = {};
+  const rotation = team==='home' ? state.homeRotation : state.awayRotation;
+  const liberoSel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  state.lastLineupByTeamName[teamName] = { rotation: rotation.slice(), liberoSelection: (liberoSel||[null,null]).slice() };
+}
+
+/// チーム名を選んだとき、そのチーム名で前回使ったスタメン・リベロが記録されていれば自動で復元する
+/// （名簿の選手が変わっていて選手IDが一致しない場合は復元しない）
+function applyLastLineupIfAvailable(team, teamName){
+  if (!state.lastLineupByTeamName) return;
+  const saved = state.lastLineupByTeamName[teamName];
+  if (!saved) return;
+  const players = currentPlayers(team);
+  const rotationOk = saved.rotation.length===6 && saved.rotation.every(id => id && players.some(p=>p.id===id));
+  if (rotationOk){
+    if (team==='home') state.homeRotation = saved.rotation.slice();
+    else state.awayRotation = saved.rotation.slice();
+  }
+  const liberoOk = (saved.liberoSelection||[]).every(id => !id || players.some(p=>p.id===id));
+  if (liberoOk){
+    if (team==='home') state.homeLiberoSelection = (saved.liberoSelection||[null,null]).slice();
+    else state.awayLiberoSelection = (saved.liberoSelection||[null,null]).slice();
+  }
+}
+
 /* ========================= スタッツ集計 ========================= */

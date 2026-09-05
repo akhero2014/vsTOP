@@ -237,6 +237,16 @@ function resetMatchState(){
   state.currentSet=1; state.setScores=[{home:0,away:0}]; state.rallyLog=[];
   state.opponentMistakePoints=0; state.homeSetsWon=0; state.awaySetsWon=0; state.pendingSetResult=null;
   state.isRallyInProgress=false; state.serveReceiveRecorded=false; selectPlayType('serve');
+
+  // スタメン・リベロ・注意ポップの状態をいったん白紙に戻し、
+  // そのチーム名で前回使ったスタメンが記録されていれば自動で復元する
+  state.showLiberoWarning = false;
+  state.homeRotation = [null,null,null,null,null,null];
+  state.awayRotation = [null,null,null,null,null,null];
+  state.homeLiberoSelection = [null,null];
+  state.awayLiberoSelection = [null,null];
+  applyLastLineupIfAvailable('home', state.homeTeamName);
+  if (state.trackOpponentStats) applyLastLineupIfAvailable('away', state.awayTeamName);
 }
 
 function resetForNewGame(){ archiveCurrentMatchIfNeeded(); resetMatchState(); state.showingStartingLineup=true; render(); }

@@ -91,6 +91,7 @@ function defaultState(){
     homeTeamName:'広島東', awayTeamName:'海風高校', tournamentName:'',
     knownTeamNames:['広島東','海風高校'], knownTournamentNames:[], myTeamName:null,
     teamRosters:{ '広島東':homePlayers, '海風高校':awayPlayers },
+    lastLineupByTeamName:{},
     matchFormat:'official', trackOpponentStats:false,
     showCourseSelector:false, showReceiveTab:true, autoRotationEnabled:true, doubleTapToRecordEnabled:true,
     attackComboOptions:['クイック','時間差','レフト','ライト','パイプ'],

@@ -55,12 +55,37 @@ function startMatch(){
   actuallyStartMatch();
 }
 function actuallyStartMatch(){
+  // スタメン未設定の警告は、リベロの警告より必ず優先する（保険の再チェック）。
+  // 「このまま開始する」を押した時点でも、万一自チームが未設定ならここでブロックする。
+  if (!homeLineupValid()){
+    state.showLiberoWarning = false;
+    showToast('自チームの6ポジションすべてに選手を設定してください');
+    render();
+    return;
+  }
+  saveLastLineupForTeamName('home', state.homeTeamName);
+  if (state.trackOpponentStats) saveLastLineupForTeamName('away', state.awayTeamName);
   state.showLiberoWarning = false;
   state.showingStartingLineup = false;
   render();
 }
 function proceedWithoutFullLibero(){ actuallyStartMatch(); }
 function cancelLiberoWarning(){ state.showLiberoWarning = false; render(); }
+
+/* ---- ローテーションを1つ進める／戻す（スタメン設定中の並び替え用） ---- */
+
+function lineupRotateForward(team){
+  const rotation = (team==='home' ? state.homeRotation : state.awayRotation).slice();
+  rotation.push(rotation.shift());
+  if (team==='home') state.homeRotation = rotation; else state.awayRotation = rotation;
+  render();
+}
+function lineupRotateBackward(team){
+  const rotation = (team==='home' ? state.homeRotation : state.awayRotation).slice();
+  rotation.unshift(rotation.pop());
+  if (team==='home') state.homeRotation = rotation; else state.awayRotation = rotation;
+  render();
+}
 
 /* ---- 6ポジションの選手選択 ---- */
 
@@ -131,6 +156,10 @@ function renderLineupCourt(team, title){
       <span class="muted" style="align-self:center;">L：</span>
       ${renderLineupLiberoSlot(team,0)}
       ${renderLineupLiberoSlot(team,1)}
+    </div>
+    <div class="row gap8" style="margin-top:8px;">
+      <button class="btn small" style="flex:1;" onclick="lineupRotateBackward('${team}')">◀ ローテーションを戻す</button>
+      <button class="btn small" style="flex:1;" onclick="lineupRotateForward('${team}')">ローテーションを進める ▶</button>
     </div>
   </div>`;
 }
