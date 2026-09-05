@@ -132,6 +132,12 @@ function timestampString(){
     pad(formatter.getHours())+pad(formatter.getMinutes())+pad(formatter.getSeconds());
 }
 
+/// 現在までに記録されたプレー総数（アーカイブ済み＋進行中）。バックアップの差分検知に使う簡易指標。
+function totalEventFingerprint(){
+  const archived = state.matchHistory.reduce((s,m)=>s+m.rallyLog.length, 0);
+  return archived + state.rallyLog.length;
+}
+
 /// アプリの全データ（試合履歴・選手名簿・設定など）を1つのJSONファイルとして書き出す
 function exportAllDataAsJSON(){
   const json = JSON.stringify(state, null, 2);
@@ -141,7 +147,10 @@ function exportAllDataAsJSON(){
   a.href = url; a.download = 'vsTOP_backup_'+timestampString()+'.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  state.lastBackupAt = new Date().toISOString();
+  state.lastBackupFingerprint = totalEventFingerprint();
   showToast('バックアップを書き出しました');
+  render();
 }
 
 /// JSONファイルを選んで全データを復元する（ファイル選択ダイアログはinput要素なのでpromptの問題を受けない）

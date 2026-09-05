@@ -32,13 +32,13 @@ function downloadText(text, filename){
   URL.revokeObjectURL(url);
 }
 
-function detailedMatchCSV(match, playerName, team){
-  const events = match.rallyLog.filter(e=>e.team===team && (state.playerNameAliases[e.playerName]||e.playerName)===playerName);
+function detailedMatchCSV(match, playerName, side){
+  const events = match.rallyLog.filter(e=>e.team===side && (state.playerNameAliases[e.playerName]||e.playerName)===playerName);
   if (events.length===0) return '';
   let out = '';
   out += '試合日,'+new Date(match.date).toLocaleDateString('ja-JP')+'\n';
   if (match.tournamentName) out += '大会名,'+csvEscape(match.tournamentName)+'\n';
-  out += '対象チーム,'+(team==='home'?csvEscape(match.homeTeamName)+'（自チーム）':csvEscape(match.awayTeamName)+'（相手チーム）')+'\n';
+  out += '対象チーム,'+csvEscape(side==='home'?match.homeTeamName:match.awayTeamName)+'\n';
   out += '自チーム,'+csvEscape(match.homeTeamName)+'\n';
   out += '相手チーム,'+csvEscape(match.awayTeamName)+'\n';
   out += '試合形式,'+(match.matchFormat==='official'?'公式試合':'練習試合')+'\n';
@@ -107,29 +107,32 @@ function detailedMatchCSV(match, playerName, team){
 
 function collectMatchesForExport(matchIds){
   const matches = [];
-  if (state.rallyLog.length>0 && matchIds.includes('current')){
-    matches.push({ id:'current', date:new Date().toISOString(), tournamentName:state.tournamentName,
-      homeTeamName:state.homeTeamName, awayTeamName:state.awayTeamName, setScores:state.setScores,
-      rallyLog:state.rallyLog, matchFormat:state.matchFormat });
-  }
+  const current = currentAsMatchRecord();
+  if (current && matchIds.includes('current')) matches.push(current);
   state.matchHistory.forEach(m=>{ if (matchIds.includes(m.id)) matches.push(m); });
   return matches;
 }
 
-function collectPlayerNamesForMatches(matches, team){
+function collectPlayerNamesForMatches(matches, teamName){
   const names = []; const seen = new Set();
-  matches.forEach(m=>m.rallyLog.forEach(e=>{
-    if (e.team!==team) return;
-    const n = state.playerNameAliases[e.playerName]||e.playerName;
-    if (!seen.has(n)){ seen.add(n); names.push(n); }
-  }));
+  matches.forEach(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    if (!side) return;
+    m.rallyLog.forEach(e=>{
+      if (e.team!==side) return;
+      const n = state.playerNameAliases[e.playerName]||e.playerName;
+      if (!seen.has(n)){ seen.add(n); names.push(n); }
+    });
+  });
   return names;
 }
 
-function buildPlayerCsvForMatches(matches, name, team){
+function buildPlayerCsvForMatches(matches, name, teamName){
   let matchNum = 0; let body = '';
   matches.forEach(m=>{
-    const section = detailedMatchCSV(m, name, team);
+    const side = sideForTeamInMatch(m, teamName);
+    if (!side) return;
+    const section = detailedMatchCSV(m, name, side);
     if (section){ matchNum++; body += '【第'+matchNum+'試合】\n'+section; }
   });
   if (!body) return null;
@@ -139,13 +142,12 @@ function buildPlayerCsvForMatches(matches, name, team){
 
 /// ブラウザがフォルダ保存に対応していない場合のフォールバック：1件ずつダウンロードする
 
-function exportDetailedCSV(matchIds, team){
-  team = team || 'home';
+function exportDetailedCSV(matchIds, teamName){
   const matches = collectMatchesForExport(matchIds);
   if (matches.length===0){ showToast('試合を選択してください'); return; }
-  const names = collectPlayerNamesForMatches(matches, team);
+  const names = collectPlayerNamesForMatches(matches, teamName);
   names.forEach(name=>{
-    const body = buildPlayerCsvForMatches(matches, name, team);
+    const body = buildPlayerCsvForMatches(matches, name, teamName);
     if (body) downloadText(body, name.replace(/[\/:]/g,'_')+'.csv');
   });
 }
@@ -153,23 +155,22 @@ function exportDetailedCSV(matchIds, team){
 /// File System Access API に対応したブラウザでは、実際にフォルダを選んでその中に
 /// 選手ごとのCSVをまとめて書き出す。未対応ブラウザでは自動的に個別ダウンロードにフォールバックする。
 
-async function exportDetailedCSVToFolder(matchIds, team){
-  team = team || 'home';
+async function exportDetailedCSVToFolder(matchIds, teamName){
   const matches = collectMatchesForExport(matchIds);
   if (matches.length===0){ showToast('試合を選択してください'); return; }
 
   if (!window.showDirectoryPicker){
-    exportDetailedCSV(matchIds, team);
+    exportDetailedCSV(matchIds, teamName);
     showToast('お使いのブラウザはフォルダへの直接保存に対応していないため、個別のファイルとしてダウンロードしました。');
     return;
   }
 
-  const names = collectPlayerNamesForMatches(matches, team);
+  const names = collectPlayerNamesForMatches(matches, teamName);
   try{
     const dirHandle = await window.showDirectoryPicker();
     let written = 0;
     for (const name of names){
-      const body = buildPlayerCsvForMatches(matches, name, team);
+      const body = buildPlayerCsvForMatches(matches, name, teamName);
       if (!body) continue;
       const fileHandle = await dirHandle.getFileHandle(name.replace(/[\/:]/g,'_')+'.csv', {create:true});
       const writable = await fileHandle.createWritable();
@@ -181,7 +182,7 @@ async function exportDetailedCSVToFolder(matchIds, team){
   }catch(err){
     if (err && err.name==='AbortError') return;
     showToast('フォルダへの保存に失敗しました。個別ダウンロードに切り替えます。');
-    exportDetailedCSV(matchIds, team);
+    exportDetailedCSV(matchIds, teamName);
   }
 }
 

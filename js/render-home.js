@@ -39,7 +39,24 @@ function renderHome(){
           <span class="col"><span class="tt">ゲーム準備</span><span class="st">チーム名・選手を登録する</span></span>
           <span class="chev">›</span>
         </button>
+        ${backupHomeButtonHtml()}
       </div>
     </div>
   </div>`;
+}
+
+/// バックアップ状況を表示するホーム画面のボタン。前回バックアップ以降に新しい記録があれば強調表示する。
+function backupHomeButtonHtml(){
+  const current = totalEventFingerprint();
+  const hasUnsavedData = state.lastBackupFingerprint===undefined || current > state.lastBackupFingerprint;
+  const lastText = state.lastBackupAt ? new Date(state.lastBackupAt).toLocaleString('ja-JP') : 'まだバックアップしていません';
+  return `
+  <button class="home-btn ${hasUnsavedData?'orange':''}" onclick="openSheet('backup')">
+    <span class="ic">💾</span>
+    <span class="col">
+      <span class="tt">データのバックアップ${hasUnsavedData?' ⚠️':''}</span>
+      <span class="st">最終バックアップ：${esc(lastText)}${hasUnsavedData && state.lastBackupAt ? '（未バックアップの記録があります）':''}</span>
+    </span>
+    <span class="chev">›</span>
+  </button>`;
 }

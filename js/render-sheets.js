@@ -12,6 +12,7 @@ function renderActiveSheet(){
     case 'records': return renderRecordsSheet();
     case 'gamePrep': return renderGamePrepSheet();
     case 'substitution': return renderSubstitutionSheet();
+    case 'backup': return renderBackupSheet();
     default: return '';
   }
 }
@@ -96,6 +97,24 @@ function removeOptionListItem(field, index){
   render();
 }
 
+/* ==================== データのバックアップ（ホーム画面から） ==================== */
+
+function renderBackupSheet(){
+  const current = totalEventFingerprint();
+  const hasUnsavedData = state.lastBackupFingerprint===undefined || current > state.lastBackupFingerprint;
+  const lastText = state.lastBackupAt ? new Date(state.lastBackupAt).toLocaleString('ja-JP') : 'まだバックアップしていません';
+  const body = `
+    <p>最終バックアップ：<strong>${esc(lastText)}</strong></p>
+    ${hasUnsavedData
+      ? '<p class="warn-text">⚠️ 前回のバックアップ以降に新しい記録があります。バックアップをおすすめします。</p>'
+      : '<p class="muted">最新の状態までバックアップ済みです。</p>'}
+    <button class="btn primary" style="width:100%;margin:14px 0 8px;" onclick="exportAllDataAsJSON()">⬇️ 全データをJSONで書き出す</button>
+    <button class="btn" style="width:100%;" onclick="triggerImportJSON()">⬆️ JSONファイルから復元する</button>
+    <p class="muted" style="margin-top:10px;">復元すると、現在の端末のデータは選択したJSONファイルの内容で上書きされます。他の端末へ移す場合は、書き出したJSONファイルをその端末に転送してから復元してください。</p>
+  `;
+  return sheetShell('データのバックアップ', body, 'max-width:500px;');
+}
+
 /* ==================== メニュー ==================== */
 
 function renderMenuSheet(){
@@ -118,11 +137,6 @@ function renderMenuSheet(){
 
     <h3>オプション機能</h3>
     ${toggleRow('相手チームのスタッツを記録する','trackOpponentStats')}
-
-    <h3 style="margin-top:18px;">データのバックアップ</h3>
-    <button class="btn" style="width:100%;margin-bottom:8px;" onclick="exportAllDataAsJSON()">⬇️ 全データをJSONで書き出す</button>
-    <button class="btn" style="width:100%;" onclick="triggerImportJSON()">⬆️ JSONファイルから復元する</button>
-    <p class="muted" style="margin-top:6px;">復元すると、現在のデータは書き出したファイルの内容で上書きされます。</p>
   `;
   return sheetShell('メニュー', body);
 }
@@ -159,7 +173,7 @@ function teamAggregateRowsHtml(agg, opponentErrors){
 }
 
 function renderStatsSheet(){
-  const team = state.statsTeam || 'home';
+  const team = state.trackOpponentStats ? (state.statsTeam || 'home') : 'home';
   const rows = playerDetailedStatsList(team);
   const agg = aggregateFromPlayerList(rows);
   const opponentErrors = team==='home' ? (state.trackOpponentStats?opponentErrorsBenefiting('home'):state.opponentMistakePoints)
@@ -167,7 +181,7 @@ function renderStatsSheet(){
   const body = `
     <div class="row gap8" style="margin-bottom:12px;">
       <button class="btn ${team==='home'?'primary':''}" onclick="state.statsTeam='home'; render();">${esc(state.homeTeamName)}</button>
-      <button class="btn ${team==='away'?'primary':''}" onclick="state.statsTeam='away'; render();">${esc(state.awayTeamName)}</button>
+      ${state.trackOpponentStats ? `<button class="btn ${team==='away'?'primary':''}" onclick="state.statsTeam='away'; render();">${esc(state.awayTeamName)}</button>` : ''}
       <span class="grow"></span>
       <button class="btn small" onclick="simpleStatsCSV(playerDetailedStatsList('${team}'), '選手別スタッツ')">⬆️ CSV</button>
     </div>
@@ -179,19 +193,24 @@ function renderStatsSheet(){
   return sheetShell('スタッツ（今の試合）', body, 'max-width:900px;');
 }
 
-/* ==================== これまでの記録 ==================== */
+/* ==================== これまでの記録（チーム「名前」で対象を選ぶ。デフォルトは自チーム） ==================== */
 
 function recordsTeamSwitcherHtml(){
+  if (!state.recordsTeamName) state.recordsTeamName = defaultRecordsTeamName();
+  const names = allKnownTeamNamesForRecords();
   return `
-  <div class="row gap8" style="margin-bottom:12px;">
-    <button class="btn small ${(state.recordsTeam||'home')==='home'?'primary':''}" onclick="state.recordsTeam='home'; state.selectedMatchForDetail=null; render();">${esc(state.homeTeamName)}（自チーム）</button>
-    <button class="btn small ${state.recordsTeam==='away'?'primary':''}" onclick="state.recordsTeam='away'; state.selectedMatchForDetail=null; render();">${esc(state.awayTeamName)}（相手チーム）</button>
+  <div class="row gap8" style="margin-bottom:12px;align-items:center;">
+    <span class="muted">チーム：</span>
+    <select class="field" style="max-width:260px;" onchange="state.recordsTeamName=this.value; state.selectedMatchForDetail=null; render();">
+      ${names.map(n=>`<option value="${esc(n)}" ${n===state.recordsTeamName?'selected':''}>${esc(n)}</option>`).join('')}
+    </select>
   </div>`;
 }
 
 function renderRecordsSheet(){
   const tab = state.recordsTab || 'matches';
-  const team = state.recordsTeam || 'home';
+  if (!state.recordsTeamName) state.recordsTeamName = defaultRecordsTeamName();
+  const teamName = state.recordsTeamName;
   let body = recordsTeamSwitcherHtml();
   body += `
     <div class="tabbar" style="margin-bottom:14px;">
@@ -202,23 +221,17 @@ function renderRecordsSheet(){
       <button class="${tab==='csv'?'active':''}" onclick="state.recordsTab='csv'; render();">CSV出力</button>
     </div>`;
 
-  if (tab==='matches') body += renderMatchesTab(team);
-  else if (tab==='team') body += renderTeamCareerTab(team);
-  else if (tab==='players') body += renderPlayersCareerTab(team);
-  else if (tab==='rankings') body += renderRankingsBody(team);
-  else if (tab==='csv') body += renderCsvTab(team);
+  if (tab==='matches') body += renderMatchesTab(teamName);
+  else if (tab==='team') body += renderTeamCareerTab(teamName);
+  else if (tab==='players') body += renderPlayersCareerTab(teamName);
+  else if (tab==='rankings') body += renderRankingsBody(teamName);
+  else if (tab==='csv') body += renderCsvTab(teamName);
 
   return sheetShell('これまでの記録', body, 'max-width:900px;');
 }
 
-/* ---- 試合ごと（一覧＋ドリルダウン） ---- */
+/* ---- 試合ごと（そのチーム名が関わった試合だけを表示。一覧＋ドリルダウン） ---- */
 
-function currentAsMatchRecord(){
-  if (state.rallyLog.length===0) return null;
-  return { id:'current', date:new Date().toISOString(), tournamentName:state.tournamentName,
-    homeTeamName:state.homeTeamName, awayTeamName:state.awayTeamName, setScores:state.setScores,
-    rallyLog:state.rallyLog, matchFormat:state.matchFormat };
-}
 function findMatchById(id){
   if (id==='current') return currentAsMatchRecord();
   return state.matchHistory.find(m=>m.id===id) || null;
@@ -226,24 +239,27 @@ function findMatchById(id){
 function selectMatchForDetail(id){ state.selectedMatchForDetail=id; state.matchDetailTab='team'; render(); }
 function backToMatchList(){ state.selectedMatchForDetail=null; render(); }
 
-function renderMatchesTab(team){
-  if (state.selectedMatchForDetail) return renderMatchDetail(team);
+function renderMatchesTab(teamName){
+  if (state.selectedMatchForDetail) return renderMatchDetail(teamName);
 
-  const current = currentAsMatchRecord();
+  const matches = matchesInvolvingTeamName(teamName);
+  const hasCurrent = matches.some(m=>m.id==='current');
+  const pastMatches = matches.filter(m=>m.id!=='current');
+
   let html = '';
-  if (current){
+  if (hasCurrent){
     html += `<h3 style="margin-bottom:6px;">進行中の試合</h3>`;
-    html += matchRowHtml(current, team, false);
+    html += matchRowHtml(currentAsMatchRecord(), false);
   }
   html += `<h3 style="margin:14px 0 6px;">過去の試合</h3>`;
-  if (state.matchHistory.length===0){
-    html += '<p class="muted">まだ保存された試合記録がありません</p>';
+  if (pastMatches.length===0){
+    html += `<p class="muted">「${esc(teamName)}」が関わった過去の試合記録がありません</p>`;
   } else {
-    html += state.matchHistory.map(m=>matchRowHtml(m, team, true)).join('');
+    html += pastMatches.map(m=>matchRowHtml(m, true)).join('');
   }
   return html;
 }
-function matchRowHtml(match, team, deletable){
+function matchRowHtml(match, deletable){
   const setSummary = match.setScores.map(s=>s.home+'-'+s.away).join(' / ');
   return `
   <div class="card" style="margin-bottom:8px;">
@@ -255,11 +271,13 @@ function matchRowHtml(match, team, deletable){
   </div>`;
 }
 
-function renderMatchDetail(team){
+function renderMatchDetail(teamName){
   const match = findMatchById(state.selectedMatchForDetail);
-  if (!match){ state.selectedMatchForDetail=null; return renderMatchesTab(team); }
+  if (!match){ state.selectedMatchForDetail=null; return renderMatchesTab(teamName); }
+  const side = sideForTeamInMatch(match, teamName);
+  if (!side){ state.selectedMatchForDetail=null; return renderMatchesTab(teamName); }
   const tab = state.matchDetailTab || 'team';
-  const list = matchDetailedStatsForAllPlayers(match, team);
+  const list = matchDetailedStatsForAllPlayers(match, side);
 
   let html = `<button class="btn small" style="margin-bottom:10px;" onclick="backToMatchList()">← 試合一覧に戻る</button>`;
   html += `<h3 style="margin-bottom:4px;">${esc(match.homeTeamName)} vs ${esc(match.awayTeamName)}</h3>`;
@@ -272,42 +290,42 @@ function renderMatchDetail(team){
 
   if (tab==='team'){
     const agg = aggregateFromPlayerList(list);
-    html += teamAggregateRowsHtml(agg, matchOpponentErrors(match, team));
+    html += teamAggregateRowsHtml(agg, matchOpponentErrors(match, side));
   } else if (tab==='players'){
     html += list.length ? statsRowsHtml(list) : '<p class="muted">この試合の記録がありません</p>';
   } else if (tab==='rankings'){
-    html += renderRankingsBodyForList(list, matchUsedCombos(match,team), matchUsedOpponentServeTypes(match,team), matchUsedOpponentAttackTypes(match,team), 'match');
+    html += renderRankingsBodyForList(list, matchUsedCombos(match,side), matchUsedOpponentServeTypes(match,side), matchUsedOpponentAttackTypes(match,side));
   }
   return html;
 }
 
 /* ---- チーム通算 ---- */
 
-function renderTeamCareerTab(team){
-  const list = careerDetailedStatsForAllPlayers(team);
+function renderTeamCareerTab(teamName){
+  const list = careerDetailedStatsForTeamName(teamName);
   const agg = aggregateFromPlayerList(list);
-  const errors = careerOpponentErrorsForTeam(team);
-  const teamName = team==='home' ? state.homeTeamName : state.awayTeamName;
+  const errors = careerOpponentErrorsForTeamName(teamName);
   return `
-    <h3>${esc(teamName)}　通算${totalRecordedMatchCount()}試合</h3>
+    <h3>${esc(teamName)}　通算${totalRecordedMatchCountForTeamName(teamName)}試合</h3>
     ${teamAggregateRowsHtml(agg, errors)}
   `;
 }
 
 /* ---- 個人通算 ---- */
 
-function renderPlayersCareerTab(team){
-  const all = careerDetailedStatsForAllPlayers(team);
+function renderPlayersCareerTab(teamName){
+  const all = careerDetailedStatsForTeamName(teamName);
+  const isMyTeam = teamName === (state.myTeamName || state.homeTeamName);
   let html = `<div class="row" style="justify-content:space-between;margin-bottom:8px;">`;
-  html += team==='home'
+  html += isMyTeam
     ? `<button class="btn small" onclick="toggleNameMerge()">${state.showingNameMerge?'選手名の編集を閉じる':'選手名を編集'}</button>`
     : `<span></span>`;
-  html += `<button class="btn small" onclick="simpleStatsCSV(careerDetailedStatsForAllPlayers('${team}'), '個人通算成績')">⬆️ CSV</button></div>`;
+  html += `<button class="btn small" onclick="simpleStatsCSV(careerDetailedStatsForTeamName('${teamName.replace(/'/g,"\\'")}'), '個人通算成績')">⬆️ CSV</button></div>`;
 
-  if (team==='home' && state.showingNameMerge){
+  if (isMyTeam && state.showingNameMerge){
     html += `<div class="card" style="margin-bottom:12px;">
       <p class="muted" style="margin-bottom:8px;">表記ゆれや同一選手の重複登録は、名前を編集して統合できます。</p>
-      ${renderNameMergeList()}
+      ${renderNameMergeList(teamName)}
     </div>`;
   }
   html += all.length ? statsRowsHtml(all) : '<p class="muted">まだ記録がありません</p>';
@@ -327,8 +345,8 @@ function confirmEditAlias(){
   state.editingAliasFor = null;
   render();
 }
-function renderNameMergeList(){
-  const names = allTimeHomePlayerNames();
+function renderNameMergeList(teamName){
+  const names = allPlayerNamesForTeamName(teamName);
   if (names.length===0) return '<p class="muted">まだ記録がありません</p>';
   return names.map(n=>{
     if (state.editingAliasFor===n){
@@ -348,29 +366,30 @@ function renderNameMergeList(){
   }).join('');
 }
 
-/* ---- CSV出力 ---- */
+/* ---- CSV出力（そのチーム名が関わった試合のみが対象） ---- */
 
-function renderCsvTab(team){
-  const matches = [];
-  const current = currentAsMatchRecord();
-  if (current) matches.push({id:'current', label:'進行中：'+state.homeTeamName+' vs '+state.awayTeamName});
-  state.matchHistory.forEach(m=>matches.push({id:m.id, label:new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName}));
-
-  let html = `<p class="muted">出力する試合を選んでください（複数選択可）。${team==='home'?state.homeTeamName:state.awayTeamName}の選手ごとに1つのCSVファイルが作成されます。</p>`;
-  html += matches.map(m=>`
+function renderCsvTab(teamName){
+  const matches = matchesInvolvingTeamName(teamName);
+  let html = `<p class="muted">「${esc(teamName)}」が関わった試合のみ表示しています。出力する試合を選んでください（複数選択可）。選手ごとに1つのCSVファイルが作成されます。</p>`;
+  html += matches.map(m=>{
+    const label = m.id==='current'
+      ? '進行中：'+m.homeTeamName+' vs '+m.awayTeamName
+      : new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName;
+    return `
     <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
-      <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(m.label)}
-    </label>`).join('') || '<p class="muted">まだ試合記録がありません</p>';
-  html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport(true,'${team}')">📁 フォルダに保存する</button>`;
-  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExport(false,'${team}')">個別にダウンロードする</button>`;
+      <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(label)}
+    </label>`;
+  }).join('') || '<p class="muted">まだ試合記録がありません</p>';
+  html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport(true,'${teamName.replace(/'/g,"\\'")}')">📁 フォルダに保存する</button>`;
+  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExport(false,'${teamName.replace(/'/g,"\\'")}')">個別にダウンロードする</button>`;
   html += `<p class="muted" style="margin-top:8px;">「フォルダに保存する」はChrome/Edgeなど対応ブラウザで実際のフォルダに選手ごとのCSVをまとめて書き出せます。非対応の場合は自動的に個別ダウンロードになります。</p>`;
   return html;
 }
-function runCsvExport(toFolder, team){
+function runCsvExport(toFolder, teamName){
   const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
   if (ids.length===0){ showToast('試合を選択してください'); return; }
-  if (toFolder) exportDetailedCSVToFolder(ids, team);
-  else exportDetailedCSV(ids, team);
+  if (toFolder) exportDetailedCSVToFolder(ids, teamName);
+  else exportDetailedCSV(ids, teamName);
 }
 
 /* ==================== ランキング ==================== */
@@ -403,9 +422,9 @@ function scopePickerHtml(field, options){
 }
 
 /// 通算ランキング（自チーム/相手チーム、これまでの全試合を対象）
-function renderRankingsBody(team){
-  const all = careerDetailedStatsForAllPlayers(team);
-  return renderRankingsBodyForList(all, allUsedCombos(team), allUsedOpponentServeTypes(team), allUsedOpponentAttackTypes(team), 'career');
+function renderRankingsBody(teamName){
+  const all = careerDetailedStatsForTeamName(teamName);
+  return renderRankingsBodyForList(all, allUsedCombosForTeamName(teamName), allUsedOpponentServeTypesForTeamName(teamName), allUsedOpponentAttackTypesForTeamName(teamName));
 }
 
 /// 通算/単一試合どちらでも使える、ランキング本体のレンダリング。

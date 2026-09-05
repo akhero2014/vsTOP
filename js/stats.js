@@ -109,40 +109,91 @@ function detailedStatsForAllPlayersFromMatches(perMatchEventsList){
   }).sort((a,b)=>a.player.name.localeCompare(b.player.name,'ja'));
 }
 
-function careerDetailedStatsForAllPlayers(team){
-  return detailedStatsForAllPlayersFromMatches(allTimeEventsByMatch(team));
+/* ---- 通算（過去の試合＋進行中の試合）：チーム「名前」で対象を絞り込む ----
+   同じチームが試合によってhome/awayどちらの側にもなり得るため、team(役割)ではなく
+   チーム名で対象の試合を選び、試合ごとに正しい側のイベントを取り出す。 */
+
+function currentAsMatchRecord(){
+  if (state.rallyLog.length===0) return null;
+  return { id:'current', date:new Date().toISOString(), tournamentName:state.tournamentName,
+    homeTeamName:state.homeTeamName, awayTeamName:state.awayTeamName, setScores:state.setScores,
+    rallyLog:state.rallyLog, matchFormat:state.matchFormat };
 }
-function allPlayerNamesForTeam(team){
+
+/// 指定したチーム名が関わった試合だけを返す（進行中の試合＋過去の試合）
+function matchesInvolvingTeamName(teamName){
+  const list = [];
+  const current = currentAsMatchRecord();
+  if (current && (current.homeTeamName===teamName || current.awayTeamName===teamName)) list.push(current);
+  state.matchHistory.forEach(m=>{ if (m.homeTeamName===teamName || m.awayTeamName===teamName) list.push(m); });
+  return list;
+}
+/// その試合の中で、指定したチーム名がhome/awayどちら側だったか
+function sideForTeamInMatch(match, teamName){
+  if (match.homeTeamName===teamName) return 'home';
+  if (match.awayTeamName===teamName) return 'away';
+  return null;
+}
+function eventsForTeamNameByMatch(teamName){
+  return matchesInvolvingTeamName(teamName).map(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    return side ? m.rallyLog.filter(e=>e.team===side) : [];
+  });
+}
+function careerDetailedStatsForTeamName(teamName){
+  return detailedStatsForAllPlayersFromMatches(eventsForTeamNameByMatch(teamName));
+}
+function allPlayerNamesForTeamName(teamName){
   const names = new Set();
-  allTimeEventsByMatch(team).forEach(m=>m.forEach(e=>names.add(e.playerName)));
+  eventsForTeamNameByMatch(teamName).forEach(evts=>evts.forEach(e=>names.add(e.playerName)));
   return [...names].sort((a,b)=>a.localeCompare(b,'ja'));
 }
-// 選手名の統合編集は自チームのみ対象（相手チームは名前を細かく追跡する想定がないため）
-function allTimeHomePlayerNames(){ return allPlayerNamesForTeam('home'); }
-
-function totalRecordedMatchCount(){ return state.matchHistory.length + (state.rallyLog.length>0?1:0); }
-
-/// 指定チームが「相手のミス」で得た得点の通算。自チームは手動カウンターも考慮する。
-function careerOpponentErrorsForTeam(team){
-  if (team==='home'){
-    const historical = state.matchHistory.reduce((s,m)=>s+(m.homeOpponentErrors||0),0);
-    const current = state.trackOpponentStats ? opponentErrorsBenefiting('home') : state.opponentMistakePoints;
-    return historical+current;
-  }
-  const opp = 'home';
-  let total = state.matchHistory.reduce((s,m)=>s + m.rallyLog.filter(e=>e.team===opp && e.outcome==='opponent').length, 0);
-  total += state.rallyLog.filter(e=>e.team===opp && e.outcome==='opponent').length;
+function totalRecordedMatchCountForTeamName(teamName){
+  return matchesInvolvingTeamName(teamName).length;
+}
+/// 指定したチーム名が「相手のミス」で得た得点の通算
+function careerOpponentErrorsForTeamName(teamName){
+  let total = 0;
+  matchesInvolvingTeamName(teamName).forEach(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    if (!side) return;
+    const oppSide = side==='home' ? 'away' : 'home';
+    if (m.id==='current'){
+      total += state.trackOpponentStats
+        ? state.rallyLog.filter(e=>e.team===oppSide && e.outcome==='opponent').length
+        : (side==='home' ? state.opponentMistakePoints : 0);
+    } else {
+      total += side==='home'
+        ? (m.homeOpponentErrors||0)
+        : m.rallyLog.filter(e=>e.team===oppSide && e.outcome==='opponent').length;
+    }
+  });
   return total;
 }
-
-function allUsedCombos(team){
-  return [...new Set(allTimeEventsFlat(team).filter(e=>e.playType==='attack').map(e=>e.combo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+function allUsedCombosForTeamName(teamName){
+  const flat = eventsForTeamNameByMatch(teamName).flat();
+  return [...new Set(flat.filter(e=>e.playType==='attack').map(e=>e.combo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
 }
-function allUsedOpponentServeTypes(team){
-  return [...new Set(allTimeEventsFlat(team).filter(e=>e.playType==='serveReceive').map(e=>e.opponentServeType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+function allUsedOpponentServeTypesForTeamName(teamName){
+  const flat = eventsForTeamNameByMatch(teamName).flat();
+  return [...new Set(flat.filter(e=>e.playType==='serveReceive').map(e=>e.opponentServeType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
 }
-function allUsedOpponentAttackTypes(team){
-  return [...new Set(allTimeEventsFlat(team).filter(e=>e.playType==='receive').map(e=>e.opponentAttackType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+function allUsedOpponentAttackTypesForTeamName(teamName){
+  const flat = eventsForTeamNameByMatch(teamName).flat();
+  return [...new Set(flat.filter(e=>e.playType==='receive').map(e=>e.opponentAttackType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+}
+/// これまでに登場したことのある全チーム名（記録画面のチーム選択用）
+function allKnownTeamNamesForRecords(){
+  const names = new Set();
+  state.knownTeamNames.forEach(n=>names.add(n));
+  state.matchHistory.forEach(m=>{ names.add(m.homeTeamName); names.add(m.awayTeamName); });
+  const current = currentAsMatchRecord();
+  if (current){ names.add(current.homeTeamName); names.add(current.awayTeamName); }
+  return [...names].sort((a,b)=>a.localeCompare(b,'ja'));
+}
+/// 記録画面を開いたときのデフォルト選択（自チーム）
+function defaultRecordsTeamName(){
+  return state.myTeamName || state.homeTeamName;
 }
 
 /* ---- 選手別詳細成績のリストから、チーム全体の集計値を求める（通算タブ・単一試合タブ共通） ---- */

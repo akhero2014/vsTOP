@@ -1,47 +1,53 @@
 /* render-lineup.js — 試合開始設定（スタメン・リベロ・サーブ権・大会名など）画面の描画
    vsTOP アプリの一部。index.html からこの順番で読み込まれる想定です。 */
 
+function homeLineupValid(){
+  return state.homeRotation.every(Boolean) && new Set(state.homeRotation).size===6;
+}
+function awayLineupValid(){
+  return state.awayRotation.every(Boolean) && new Set(state.awayRotation).size===6;
+}
+/// ボタンの有効/無効判定。相手チームを記録しない設定のときは、相手側は自動で
+/// 仮設定されるため、相手側の入力状況によらずボタンを有効にする。
+function canAttemptStart(){
+  if (!homeLineupValid()) return false;
+  if (state.trackOpponentStats && !awayLineupValid()) return false;
+  return true;
+}
+/// 両チームとも実際に6人埋まっているかどうかの厳密なチェック（自動仮設定の後に使う）
 function lineupValid(){
-  const homeOk = state.homeRotation.every(Boolean) && new Set(state.homeRotation).size===6;
-  const awayOk = state.awayRotation.every(Boolean) && new Set(state.awayRotation).size===6;
-  return homeOk && awayOk;
+  return homeLineupValid() && awayLineupValid();
 }
 
-/// 相手チームのスタッツを記録しない設定のとき、内部のローテーション/サーブ権処理のために
-/// 仮のスタメンとリベロ2名を自動で埋める（画面には出さず、裏側だけで整える）
+/// 相手チームのスタッツを記録しない設定のとき、相手チームのスタメン6人とリベロ1人を
+/// 「プレイヤー1」〜「プレイヤー7」という仮の選手として設定する（内部のローテーション/
+/// サーブ権処理のために必要。実際の相手選手名は使わない）
 function autoFillAwayLineupIfNeeded(){
-  if (state.trackOpponentStats) return;
-  if (!(state.awayRotation.every(Boolean) && new Set(state.awayRotation).size===6)){
-    while (state.awayPlayers.length < 8){
-      const n = state.awayPlayers.length+1;
-      state.awayPlayers.push({id:uid(), number:n, name:'相手選手'+n, position:'OH'});
-    }
-    state.awayRotation = state.awayPlayers.slice(0,6).map(p=>p.id);
+  const placeholders = [];
+  for (let i=1;i<=7;i++){
+    placeholders.push({ id:uid(), number:i, name:'プレイヤー'+i, position: i===7 ? 'L' : 'OH' });
   }
-  const selected = (state.awayLiberoSelection||[]).filter(Boolean);
-  if (selected.length < 2){
-    const usedIds = new Set(state.awayRotation);
-    let candidates = state.awayPlayers.filter(p=>!usedIds.has(p.id));
-    while (candidates.length < 2){
-      const n = state.awayPlayers.length+1;
-      const p = {id:uid(), number:n, name:'相手L'+n, position:'L'};
-      state.awayPlayers.push(p);
-      candidates.push(p);
-    }
-    state.awayLiberoSelection = [candidates[0].id, candidates[1].id];
-  }
+  state.awayPlayers = placeholders;
+  state.awayRotation = placeholders.slice(0,6).map(p=>p.id);
+  state.awayLiberoSelection = [placeholders[6].id, null];
 }
 
 function startMatch(){
-  if (!lineupValid()){
-    showToast('両チームの6ポジションすべてに選手を設定してください');
+  if (!homeLineupValid()){
+    showToast('自チームの6ポジションすべてに選手を設定してください');
     return;
   }
-  if (!state.trackOpponentStats) autoFillAwayLineupIfNeeded();
+  if (state.trackOpponentStats && !awayLineupValid()){
+    showToast('相手チームの6ポジションすべてに選手を設定してください');
+    return;
+  }
+  if (!state.trackOpponentStats){
+    autoFillAwayLineupIfNeeded();
+  }
 
+  // リベロの注意ポップは自チームのみ対象（相手を記録しない場合は仮のリベロ1人で運用するため対象外）
   const homeLiberoCount = (state.homeLiberoSelection||[]).filter(Boolean).length;
-  const awayLiberoCount = state.trackOpponentStats ? (state.awayLiberoSelection||[]).filter(Boolean).length : 2;
-  if (homeLiberoCount<2 || awayLiberoCount<2){
+  if (homeLiberoCount < 2){
     state.showLiberoWarning = true;
     render();
     return;
@@ -244,7 +250,7 @@ function renderLineup(){
             <div class="switch ${state.trackOpponentStats?'on':''}" onclick="state.trackOpponentStats=!state.trackOpponentStats; render();"></div>
           </div>
         </div>
-        ${!state.trackOpponentStats ? '<p class="muted">オフの場合、相手チームのスタメン・リベロは試合開始時に自動で仮設定されます（画面には表示されません）。</p>' : ''}
+        ${!state.trackOpponentStats ? '<p class="muted">オフの場合、相手チームのスタメン6人とリベロ1人は試合開始時に「プレイヤー1」〜「プレイヤー7」として自動で仮設定されます。</p>' : ''}
       </div>
 
       <div class="lineup-cols">
@@ -261,8 +267,8 @@ function renderLineup(){
             </div>
           </div>
           <div class="grow"></div>
-          <button class="record-btn" ${lineupValid()?'':'disabled'} onclick="startMatch()">試合を開始する</button>
-          ${lineupValid() ? '' : '<p class="warn-text">両チームの6ポジションすべてに選手を設定してください。</p>'}
+          <button class="record-btn" ${canAttemptStart()?'':'disabled'} onclick="startMatch()">試合を開始する</button>
+          ${canAttemptStart() ? '' : '<p class="warn-text">両チームの6ポジションすべてに選手を設定してください（自チームは必須、相手チームは記録する設定の場合のみ必須です）。</p>'}
         </div>
       </div>
     </div>
