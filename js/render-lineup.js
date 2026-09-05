@@ -67,6 +67,8 @@ function actuallyStartMatch(){
   if (state.trackOpponentStats) saveLastLineupForTeamName('away', state.awayTeamName);
   state.showLiberoWarning = false;
   state.showingStartingLineup = false;
+  // 自チームが最初にサーブする場合、P1の選手を自動でサーブ選手として選択しておく
+  selectPlayType(state.servingTeam==='home' ? 'serve' : 'serveReceive');
   render();
 }
 function proceedWithoutFullLibero(){ actuallyStartMatch(); }
@@ -93,8 +95,12 @@ function openLineupPicker(team, index){ state.lineupPicker = {team, index}; rend
 function pickLineupPlayer(playerId){
   const {team, index} = state.lineupPicker;
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
+  const liberoSel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
   const already = rotation.indexOf(playerId);
   if (already>=0) rotation[already] = null;
+  // 同じ選手がリベロにも設定されていたら外す（スタメンとリベロの重複を防ぐ）
+  const liberoIdx = liberoSel.indexOf(playerId);
+  if (liberoIdx>=0) liberoSel[liberoIdx] = null;
   rotation[index] = playerId;
   state.lineupPicker = null;
   render();
@@ -117,8 +123,12 @@ function openLineupLiberoPicker(team, index){ state.lineupLiberoPicker = {team, 
 function pickLineupLiberoPlayer(playerId){
   const {team, index} = state.lineupLiberoPicker;
   const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  const rotation = team==='home' ? state.homeRotation : state.awayRotation;
   const already = sel.indexOf(playerId);
   if (already>=0) sel[already] = null;
+  // 同じ選手がスタメン(P1〜P6)にも設定されていたら外す（重複を防ぐ）
+  const rotationIdx = rotation.indexOf(playerId);
+  if (rotationIdx>=0) rotation[rotationIdx] = null;
   sel[index] = playerId;
   state.lineupLiberoPicker = null;
   render();
