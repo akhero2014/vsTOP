@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>バレーボール スタッツ</title>
+<title>vsTOP</title>
 <style>
   :root{
     --navy:#12213a; --navy2:#1a2f52; --court:#d9a066; --court2:#c7935a;
@@ -168,6 +168,11 @@
     .col-court{width:100%;}
     .lineup-cols{flex-direction:column;}
   }
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#fff;
+    padding:12px 20px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:100;max-width:90vw;text-align:center;}
+  .inline-add{display:flex;gap:8px;align-items:center;}
+  .list-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--gray-bg);margin-bottom:6px;}
+  .list-item .grow-text{flex:1;}
 </style>
 </head>
 <body>

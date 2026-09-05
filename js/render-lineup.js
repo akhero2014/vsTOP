@@ -1,5 +1,5 @@
 /* render-lineup.js — 試合開始設定（スタメン・サーブ権・大会名など）画面の描画
-   volleyball-stats アプリの一部。index.html からこの順番で読み込まれる想定です。 */
+   vsTOP アプリの一部。index.html からこの順番で読み込まれる想定です。 */
 
 function lineupValid(){
   const homeOk = state.homeRotation.every(Boolean) && new Set(state.homeRotation).size===6;
@@ -38,6 +38,20 @@ function renderLineupSlot(team, index){
     </button>`;
 }
 
+/// リベロは6ポジションの外側に、確認用として表示する（実際の登録はゲーム準備の選手編集で行う）
+function renderLineupLiberoBadge(team){
+  const l = liberos(team);
+  if (l.length===0){
+    return `<div class="mini-slot" style="opacity:.6;"><div class="c">-</div><div style="font-size:9px;">リベロ</div><div style="font-size:10px;">未登録</div></div>`;
+  }
+  return l.map((p,i)=>`
+    <div class="mini-slot filled" style="background:rgba(245,158,11,.35);">
+      <div class="c" style="background:#f59e0b;">${p.number}</div>
+      <div style="font-size:9px;">L${i+1}</div>
+      <div style="font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}</div>
+    </div>`).join('');
+}
+
 function renderLineupCourt(team, title){
   const front = team==='home' ? HOME_FRONT : AWAY_FRONT;
   const back = team==='home' ? HOME_BACK : AWAY_BACK;
@@ -53,15 +67,69 @@ function renderLineupCourt(team, title){
       <div class="row gap8" style="margin-bottom:8px;">${front.map(i=>renderLineupSlot(team,i)).join('')}</div>
       <div class="row gap8">${back.map(i=>renderLineupSlot(team,i)).join('')}</div>
     </div>
+    <div class="row gap8" style="margin-top:8px;">
+      <span class="muted" style="align-self:center;">リベロ：</span>
+      ${renderLineupLiberoBadge(team)}
+    </div>
+  </div>`;
+}
+
+/// チーム名／大会名のプルダウン＋「＋」新規追加（promptは使わず、押すとインラインの入力欄が開く）
+function teamPickerHtml(team){
+  const label = team==='home' ? '自チーム' : '相手チーム';
+  const currentName = team==='home' ? state.homeTeamName : state.awayTeamName;
+  const names = orderedTeamNames();
+
+  if (state.addingTeamFor===team){
+    return `
+    <div class="col grow" style="min-width:200px;">
+      <label class="muted">${label}</label>
+      <div class="inline-add">
+        <input class="field grow" placeholder="チーム名を入力" value="${esc(state.newNameDraft||'')}"
+          oninput="state.newNameDraft=this.value" onkeydown="if(event.key==='Enter'){confirmAddTeamName();}">
+        <button class="btn primary" onclick="confirmAddTeamName()">決定</button>
+        <button class="btn" onclick="cancelAddTeamName()">キャンセル</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="col grow" style="min-width:200px;">
+    <label class="muted">${label}</label>
+    <div class="inline-add">
+      <select class="field grow" onchange="handleTeamNameSelect('${team}', this.value)">
+        ${names.map(n=>`<option value="${esc(n)}" ${n===currentName?'selected':''}>${esc(n)}</option>`).join('')}
+      </select>
+      <button class="btn" onclick="startAddTeamName('${team}')" title="新規チームを追加">＋</button>
+    </div>
+  </div>`;
+}
+function tournamentPickerHtml(){
+  if (state.addingTournament){
+    return `
+    <div class="col grow" style="min-width:200px;">
+      <label class="muted">大会名（任意）</label>
+      <div class="inline-add">
+        <input class="field grow" placeholder="大会名を入力" value="${esc(state.newNameDraft||'')}"
+          oninput="state.newNameDraft=this.value" onkeydown="if(event.key==='Enter'){confirmAddTournament();}">
+        <button class="btn primary" onclick="confirmAddTournament()">決定</button>
+        <button class="btn" onclick="cancelAddTournament()">キャンセル</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="col grow" style="min-width:200px;">
+    <label class="muted">大会名（任意）</label>
+    <div class="inline-add">
+      <select class="field grow" onchange="handleTournamentSelect(this.value)">
+        <option value="" ${!state.tournamentName?'selected':''}>未選択</option>
+        ${state.knownTournamentNames.map(n=>`<option value="${esc(n)}" ${n===state.tournamentName?'selected':''}>${esc(n)}</option>`).join('')}
+      </select>
+      <button class="btn" onclick="startAddTournament()" title="新しい大会名を追加">＋</button>
+    </div>
   </div>`;
 }
 
 function renderLineup(){
-  const teamNames = orderedTeamNames();
-  const teamOptions = teamNames.map(n=>`<option value="${esc(n)}" ${n===state.homeTeamName?'selected':''}>${esc(n)}</option>`).join('');
-  const awayOptions = teamNames.map(n=>`<option value="${esc(n)}" ${n===state.awayTeamName?'selected':''}>${esc(n)}</option>`).join('');
-  const tOptions = state.knownTournamentNames.map(n=>`<option value="${esc(n)}" ${n===state.tournamentName?'selected':''}>${esc(n)}</option>`).join('');
-
   return `
   <div class="screen">
     <div class="header">
@@ -73,31 +141,12 @@ function renderLineup(){
         <p class="muted">試合開始前にスターティングメンバーとサーブ権を設定してください。ポジションをタップして選手を選びます。</p>
 
         <div class="row gap16" style="flex-wrap:wrap;">
-          <div class="col grow" style="min-width:200px;">
-            <label class="muted">大会名（任意）</label>
-            <select class="field" onchange="handleTournamentSelect(this.value)">
-              <option value="">未選択</option>
-              ${tOptions}
-              <option value="__new__">＋ 新しい大会名を入力</option>
-            </select>
-          </div>
+          ${tournamentPickerHtml()}
         </div>
 
         <div class="row gap16" style="flex-wrap:wrap;">
-          <div class="col grow" style="min-width:200px;">
-            <label class="muted">自チーム</label>
-            <select class="field" onchange="handleTeamNameSelect('home', this.value)">
-              ${teamOptions}
-              <option value="__new__">＋ 新規チームを入力</option>
-            </select>
-          </div>
-          <div class="col grow" style="min-width:200px;">
-            <label class="muted">相手チーム</label>
-            <select class="field" onchange="handleTeamNameSelect('away', this.value)">
-              ${awayOptions}
-              <option value="__new__">＋ 新規チームを入力</option>
-            </select>
-          </div>
+          ${teamPickerHtml('home')}
+          ${teamPickerHtml('away')}
         </div>
 
         <div class="row gap16" style="flex-wrap:wrap;">
@@ -155,5 +204,3 @@ function renderLineupPickerSheet(){
     </div>
   </div>`;
 }
-
-/* ========================= 試合中：ヘッダー ========================= */

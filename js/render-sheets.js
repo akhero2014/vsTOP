@@ -1,5 +1,8 @@
-/* render-sheets.js — モーダルシートの描画：設定・メニュー・スタッツ・これまでの記録（試合/チーム/個人/ランキング/CSV）・ゲーム準備・メンバーチェンジ
-   volleyball-stats アプリの一部。index.html からこの順番で読み込まれる想定です。 */
+/* render-sheets.js — モーダルシートの描画：設定・メニュー・スタッツ・これまでの記録
+   （試合ごと/チーム/個人/ランキング/CSV、チーム選択・試合ドリルダウン対応）・
+   ゲーム準備（チーム名編集・選手登録の重複防止）・メンバーチェンジ・選手名の統合編集
+   すべてprompt()/confirm()/alert()に頼らず、画面内蔵のUIで完結するようにしてある。
+   vsTOP アプリの一部。index.html からこの順番で読み込まれる想定です。 */
 
 function renderActiveSheet(){
   switch(state.activeSheet){
@@ -12,7 +15,6 @@ function renderActiveSheet(){
     default: return '';
   }
 }
-
 function sheetShell(title, bodyHtml, widthStyle){
   return `
   <div class="overlay" onclick="if(event.target===this) closeSheet();">
@@ -22,7 +24,6 @@ function sheetShell(title, bodyHtml, widthStyle){
     </div>
   </div>`;
 }
-
 function toggleRow(label, field){
   return `
   <div class="toggle-row">
@@ -31,7 +32,7 @@ function toggleRow(label, field){
   </div>`;
 }
 
-/* ---- 設定 ---- */
+/* ==================== 設定 ==================== */
 
 function renderSettingsSheet(){
   const body = `
@@ -40,35 +41,70 @@ function renderSettingsSheet(){
     <input class="field" value="${esc(state.homeTeamName)}" oninput="state.homeTeamName=this.value; save();" style="margin-bottom:10px;">
     <label class="muted">相手チーム名</label>
     <input class="field" value="${esc(state.awayTeamName)}" oninput="state.awayTeamName=this.value; save();">
+
     <h3 style="margin-top:18px;">入力設定</h3>
     ${toggleRow('コース選択を表示','showCourseSelector')}
     ${toggleRow('レシーブのタブを表示','showReceiveTab')}
     ${toggleRow('得点時に自動でローテーション','autoRotationEnabled')}
     ${toggleRow('結果をダブルタップして記録','doubleTapToRecordEnabled')}
+
     <h3 style="margin-top:18px;">カスタム項目</h3>
-    <button class="btn" style="width:100%;margin-bottom:8px;" onclick="editOptionList('serveTypeOptions','サーブの種類')">サーブの種類を編集</button>
-    <button class="btn" style="width:100%;" onclick="editOptionList('attackComboOptions','アタックのコンビネーション')">スパイクのコンビネーションを編集</button>
+    ${renderOptionListSection('serveTypeOptions', 'サーブの種類')}
+    ${renderOptionListSection('attackComboOptions', 'スパイクのコンビネーション')}
   `;
-  return sheetShell('設定', body);
+  return sheetShell('設定', body, 'max-width:600px;');
 }
 
-function editOptionList(field, title){
-  const current = state[field].join(', ');
-  const input = window.prompt(title+'をカンマ区切りで編集してください', current);
-  if (input===null) return;
-  state[field] = input.split(',').map(s=>s.trim()).filter(Boolean);
+/// promptを使わず、その場で開閉するインライン編集リスト（サーブの種類・コンビネーション用）
+function renderOptionListSection(field, title){
+  const isOpen = state.editingOptionList===field;
+  const items = state[field];
+  let html = `
+    <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+      <strong>${esc(title)}</strong>
+      <button class="btn small" onclick="state.editingOptionList=${isOpen?'null':`'${field}'`}; state.newNameDraft=''; render();">
+        ${isOpen?'閉じる':'編集'}
+      </button>
+    </div>`;
+  if (isOpen){
+    html += `<div class="card" style="margin-bottom:14px;">`;
+    html += items.map((item,i)=>`
+      <div class="list-item">
+        <span class="grow-text">${esc(item)}</span>
+        <button class="btn small danger" onclick="removeOptionListItem('${field}', ${i})">削除</button>
+      </div>`).join('') || '<p class="muted">まだ登録されていません</p>';
+    html += `
+      <div class="inline-add" style="margin-top:8px;">
+        <input class="field grow" placeholder="新しい項目を入力" value="${esc(state.newNameDraft||'')}"
+          oninput="state.newNameDraft=this.value" onkeydown="if(event.key==='Enter'){addOptionListItem('${field}');}">
+        <button class="btn primary" onclick="addOptionListItem('${field}')">追加</button>
+      </div>`;
+    html += `</div>`;
+  }
+  return html;
+}
+function addOptionListItem(field){
+  const v = (state.newNameDraft||'').trim();
+  if (!v){ showToast('項目名を入力してください'); return; }
+  if (state[field].includes(v)){ showToast('すでに登録されています'); return; }
+  state[field].push(v);
+  state.newNameDraft='';
+  render();
+}
+function removeOptionListItem(field, index){
+  state[field].splice(index,1);
   render();
 }
 
-/* ---- メニュー ---- */
+/* ==================== メニュー ==================== */
 
 function renderMenuSheet(){
   const body = `
     <button class="btn" style="width:100%;margin-bottom:8px;" onclick="pauseAndReturnHome()">🏠 ホームに戻る（一時停止）</button>
     <p class="muted" style="margin-bottom:16px;">記録はそのまま保持され、ホーム画面の「試合を再開する」から続きを記録できます。</p>
 
-    <button class="btn danger" style="width:100%;margin-bottom:8px;" onclick="if(confirm('新規ゲームを開始しますか？現在の記録は保存されます。')) resetForNewGame();">🔄 新規ゲームを開始</button>
-    <button class="btn danger" style="width:100%;margin-bottom:18px;" onclick="endCurrentGame()">🏁 このゲームを終了する</button>
+    <div class="row" style="margin-bottom:8px;">${confirmButtonHtml('newGame','🔄 新規ゲームを開始','resetForNewGame();')}</div>
+    <div class="row" style="margin-bottom:18px;">${confirmButtonHtml('endGame','🏁 このゲームを終了する','endCurrentGame();')}</div>
 
     <h3>セット数の手動修正</h3>
     <div class="row" style="justify-content:space-between;margin:8px 0;">
@@ -86,7 +122,7 @@ function renderMenuSheet(){
   return sheetShell('メニュー', body);
 }
 
-/* ---- 今の試合のスタッツ ---- */
+/* ==================== 今の試合のスタッツ（チーム＋選手） ==================== */
 
 function statsRowsHtml(rows){
   return `
@@ -106,10 +142,23 @@ function statsRowsHtml(rows){
     </table>
   </div>`;
 }
+function teamAggregateRowsHtml(agg, opponentErrors){
+  return `
+  <div class="col gap8" style="margin-bottom:16px;">
+    <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(agg.catchRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">ブロック</span><strong>${agg.totalBlocks}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">相手ミスによる得点</span><strong>${opponentErrors}</strong></div>
+  </div>`;
+}
 
 function renderStatsSheet(){
   const team = state.statsTeam || 'home';
   const rows = playerDetailedStatsList(team);
+  const agg = aggregateFromPlayerList(rows);
+  const opponentErrors = team==='home' ? (state.trackOpponentStats?opponentErrorsBenefiting('home'):state.opponentMistakePoints)
+                                        : state.rallyLog.filter(e=>e.team==='home'&&e.outcome==='opponent').length;
   const body = `
     <div class="row gap8" style="margin-bottom:12px;">
       <button class="btn ${team==='home'?'primary':''}" onclick="state.statsTeam='home'; render();">${esc(state.homeTeamName)}</button>
@@ -117,120 +166,334 @@ function renderStatsSheet(){
       <span class="grow"></span>
       <button class="btn small" onclick="simpleStatsCSV(playerDetailedStatsList('${team}'), '選手別スタッツ')">⬆️ CSV</button>
     </div>
+    <h3>チームスタッツ</h3>
+    ${teamAggregateRowsHtml(agg, opponentErrors)}
+    <h3>選手別スタッツ</h3>
     ${rows.length ? statsRowsHtml(rows) : '<p class="muted">まだ記録がありません</p>'}
   `;
-  return sheetShell('選手別スタッツ（今の試合）', body, 'max-width:900px;');
+  return sheetShell('スタッツ（今の試合）', body, 'max-width:900px;');
 }
 
-/* ---- これまでの記録 ---- */
+/* ==================== これまでの記録 ==================== */
+
+function recordsTeamSwitcherHtml(){
+  return `
+  <div class="row gap8" style="margin-bottom:12px;">
+    <button class="btn small ${(state.recordsTeam||'home')==='home'?'primary':''}" onclick="state.recordsTeam='home'; state.selectedMatchForDetail=null; render();">${esc(state.homeTeamName)}（自チーム）</button>
+    <button class="btn small ${state.recordsTeam==='away'?'primary':''}" onclick="state.recordsTeam='away'; state.selectedMatchForDetail=null; render();">${esc(state.awayTeamName)}（相手チーム）</button>
+  </div>`;
+}
 
 function renderRecordsSheet(){
   const tab = state.recordsTab || 'matches';
-  let body = `
+  const team = state.recordsTeam || 'home';
+  let body = recordsTeamSwitcherHtml();
+  body += `
     <div class="tabbar" style="margin-bottom:14px;">
-      <button class="${tab==='matches'?'active':''}" onclick="state.recordsTab='matches'; render();">試合ごと</button>
+      <button class="${tab==='matches'?'active':''}" onclick="state.recordsTab='matches'; state.selectedMatchForDetail=null; render();">試合ごと</button>
       <button class="${tab==='team'?'active':''}" onclick="state.recordsTab='team'; render();">チーム通算</button>
       <button class="${tab==='players'?'active':''}" onclick="state.recordsTab='players'; render();">個人通算</button>
       <button class="${tab==='rankings'?'active':''}" onclick="state.recordsTab='rankings'; render();">ランキング</button>
       <button class="${tab==='csv'?'active':''}" onclick="state.recordsTab='csv'; render();">CSV出力</button>
     </div>`;
 
-  if (tab==='matches'){
-    const cur = state.rallyLog.length ? [`<div class="history-row"><strong>進行中：${esc(state.homeTeamName)} vs ${esc(state.awayTeamName)}</strong></div>`] : [];
-    const rows = state.matchHistory.map(m=>`
-      <div class="history-row col" style="align-items:flex-start;">
-        <div class="row" style="justify-content:space-between;width:100%;">
-          <span class="muted">${new Date(m.date).toLocaleString('ja-JP')}</span>
-          <button class="btn small danger" onclick="if(confirm('この試合記録を削除しますか？')){state.matchHistory=state.matchHistory.filter(x=>x.id!=='${m.id}'); render();}">削除</button>
-        </div>
-        <div>${esc(m.homeTeamName)} ${m.setScores.map(s=>s.home+'-'+s.away).join(' / ')} ${esc(m.awayTeamName)}</div>
-      </div>`).join('');
-    body += cur.join('') + (rows || '<p class="muted">まだ保存された試合記録がありません</p>');
-  } else if (tab==='team'){
-    const historicalErrors = state.matchHistory.reduce((s,m)=>s+m.homeOpponentErrors,0);
-    const currentErrors = state.trackOpponentStats ? opponentErrorsBenefiting('home') : state.opponentMistakePoints;
-    const all = careerDetailedStatsForAllPlayers();
-    const totalSpike = all.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided}), {total:0,decided:0});
-    const totalServe = all.reduce((s,p)=>({total:s.total+p.serve.total, decided:s.decided+p.serve.decided, effective:s.effective+p.serve.effective, miss:s.miss+p.serve.miss}), {total:0,decided:0,effective:0,miss:0});
-    const totalRec = all.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass}), {total:0,aPass:0});
-    const totalBlock = all.reduce((s,p)=>s+p.block.decided, 0);
-    const spikeRate = totalSpike.total>0 ? totalSpike.decided/totalSpike.total*100 : null;
-    const serveRate = totalServe.total>0 ? (totalServe.decided*100+totalServe.effective*25-totalServe.miss*25)/totalServe.total : null;
-    const catchRate = totalRec.total>0 ? totalRec.aPass/totalRec.total*100 : null;
-    body += `
-      <h3>${esc(state.homeTeamName)}　通算${totalRecordedMatchCount()}試合</h3>
-      <div class="col gap8" style="margin-top:10px;">
-        <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(spikeRate)}</strong></div>
-        <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(serveRate)}</strong></div>
-        <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(catchRate)}</strong></div>
-        <div class="row" style="justify-content:space-between;"><span class="muted">ブロック</span><strong>${totalBlock}</strong></div>
-        <div class="row" style="justify-content:space-between;"><span class="muted">相手ミスによる得点</span><strong>${historicalErrors+currentErrors}</strong></div>
-      </div>`;
-  } else if (tab==='players'){
-    const all = careerDetailedStatsForAllPlayers();
-    body += `<div class="row" style="justify-content:space-between;margin-bottom:8px;">
-      <button class="btn small" onclick="toggleNameMerge()">${state.showingNameMerge?'選手名の編集を閉じる':'選手名を編集'}</button>
-      <button class="btn small" onclick="simpleStatsCSV(careerDetailedStatsForAllPlayers(), '個人通算成績')">⬆️ CSV</button>
-    </div>`;
-    if (state.showingNameMerge){
-      body += `<div class="card" style="margin-bottom:12px;">
-        <p class="muted" style="margin-bottom:8px;">表記ゆれや同一選手の重複登録は、名前を編集して統合できます。</p>
-        ${renderNameMergeList()}
-      </div>`;
-    }
-    body += all.length ? statsRowsHtml(all) : '<p class="muted">まだ記録がありません</p>';
-  } else if (tab==='rankings'){
-    body += renderRankingsBody();
-  } else if (tab==='csv'){
-    const matches = [];
-    if (state.rallyLog.length) matches.push({id:'current', label:'進行中：'+state.homeTeamName+' vs '+state.awayTeamName});
-    state.matchHistory.forEach(m=>matches.push({id:m.id, label:new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName}));
-    body += `<p class="muted">出力する試合を選んでください（複数選択可）。選手ごとに1つのCSVファイルが作成されます。</p>`;
-    body += matches.map(m=>`
-      <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
-        <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(m.label)}
-      </label>`).join('') || '<p class="muted">まだ試合記録がありません</p>';
-    body += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport(true)">📁 フォルダに保存する</button>`;
-    body += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExport(false)">個別にダウンロードする</button>`;
-    body += `<p class="muted" style="margin-top:8px;">「フォルダに保存する」はChrome/Edgeなど対応ブラウザで実際のフォルダに選手ごとのCSVをまとめて書き出せます。非対応の場合は自動的に個別ダウンロードになります。</p>`;
-  }
+  if (tab==='matches') body += renderMatchesTab(team);
+  else if (tab==='team') body += renderTeamCareerTab(team);
+  else if (tab==='players') body += renderPlayersCareerTab(team);
+  else if (tab==='rankings') body += renderRankingsBody(team);
+  else if (tab==='csv') body += renderCsvTab(team);
+
   return sheetShell('これまでの記録', body, 'max-width:900px;');
 }
 
-function runCsvExport(toFolder){
-  const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
-  if (ids.length===0){ alert('試合を選択してください'); return; }
-  if (toFolder) exportDetailedCSVToFolder(ids);
-  else exportDetailedCSV(ids);
+/* ---- 試合ごと（一覧＋ドリルダウン） ---- */
+
+function currentAsMatchRecord(){
+  if (state.rallyLog.length===0) return null;
+  return { id:'current', date:new Date().toISOString(), tournamentName:state.tournamentName,
+    homeTeamName:state.homeTeamName, awayTeamName:state.awayTeamName, setScores:state.setScores,
+    rallyLog:state.rallyLog, matchFormat:state.matchFormat };
+}
+function findMatchById(id){
+  if (id==='current') return currentAsMatchRecord();
+  return state.matchHistory.find(m=>m.id===id) || null;
+}
+function selectMatchForDetail(id){ state.selectedMatchForDetail=id; state.matchDetailTab='team'; render(); }
+function backToMatchList(){ state.selectedMatchForDetail=null; render(); }
+
+function renderMatchesTab(team){
+  if (state.selectedMatchForDetail) return renderMatchDetail(team);
+
+  const current = currentAsMatchRecord();
+  let html = '';
+  if (current){
+    html += `<h3 style="margin-bottom:6px;">進行中の試合</h3>`;
+    html += matchRowHtml(current, team, false);
+  }
+  html += `<h3 style="margin:14px 0 6px;">過去の試合</h3>`;
+  if (state.matchHistory.length===0){
+    html += '<p class="muted">まだ保存された試合記録がありません</p>';
+  } else {
+    html += state.matchHistory.map(m=>matchRowHtml(m, team, true)).join('');
+  }
+  return html;
+}
+function matchRowHtml(match, team, deletable){
+  const setSummary = match.setScores.map(s=>s.home+'-'+s.away).join(' / ');
+  return `
+  <div class="card" style="margin-bottom:8px;">
+    <button style="width:100%;text-align:left;" onclick="selectMatchForDetail('${match.id}')">
+      <div class="muted" style="font-size:12px;">${new Date(match.date).toLocaleString('ja-JP')}${match.tournamentName?'　'+esc(match.tournamentName):''}</div>
+      <div>${esc(match.homeTeamName)}　${esc(setSummary)}　${esc(match.awayTeamName)}</div>
+    </button>
+    ${deletable ? `<div style="margin-top:6px;">${confirmButtonHtml('delMatch-'+match.id, '削除', "state.matchHistory=state.matchHistory.filter(x=>x.id!=='"+match.id+"'); render();")}</div>` : ''}
+  </div>`;
 }
 
-/* ---- ゲーム準備 ---- */
+function renderMatchDetail(team){
+  const match = findMatchById(state.selectedMatchForDetail);
+  if (!match){ state.selectedMatchForDetail=null; return renderMatchesTab(team); }
+  const tab = state.matchDetailTab || 'team';
+  const list = matchDetailedStatsForAllPlayers(match, team);
+
+  let html = `<button class="btn small" style="margin-bottom:10px;" onclick="backToMatchList()">← 試合一覧に戻る</button>`;
+  html += `<h3 style="margin-bottom:4px;">${esc(match.homeTeamName)} vs ${esc(match.awayTeamName)}</h3>`;
+  html += `<p class="muted" style="margin-bottom:10px;">${new Date(match.date).toLocaleString('ja-JP')}　${match.setScores.map(s=>s.home+'-'+s.away).join(' / ')}</p>`;
+  html += `<div class="tabbar" style="margin-bottom:12px;">
+    <button class="${tab==='team'?'active':''}" onclick="state.matchDetailTab='team'; render();">チームスタッツ</button>
+    <button class="${tab==='players'?'active':''}" onclick="state.matchDetailTab='players'; render();">個人スタッツ</button>
+    <button class="${tab==='rankings'?'active':''}" onclick="state.matchDetailTab='rankings'; render();">ランキング</button>
+  </div>`;
+
+  if (tab==='team'){
+    const agg = aggregateFromPlayerList(list);
+    html += teamAggregateRowsHtml(agg, matchOpponentErrors(match, team));
+  } else if (tab==='players'){
+    html += list.length ? statsRowsHtml(list) : '<p class="muted">この試合の記録がありません</p>';
+  } else if (tab==='rankings'){
+    html += renderRankingsBodyForList(list, matchUsedCombos(match,team), matchUsedOpponentServeTypes(match,team), matchUsedOpponentAttackTypes(match,team), 'match');
+  }
+  return html;
+}
+
+/* ---- チーム通算 ---- */
+
+function renderTeamCareerTab(team){
+  const list = careerDetailedStatsForAllPlayers(team);
+  const agg = aggregateFromPlayerList(list);
+  const errors = careerOpponentErrorsForTeam(team);
+  const teamName = team==='home' ? state.homeTeamName : state.awayTeamName;
+  return `
+    <h3>${esc(teamName)}　通算${totalRecordedMatchCount()}試合</h3>
+    ${teamAggregateRowsHtml(agg, errors)}
+  `;
+}
+
+/* ---- 個人通算 ---- */
+
+function renderPlayersCareerTab(team){
+  const all = careerDetailedStatsForAllPlayers(team);
+  let html = `<div class="row" style="justify-content:space-between;margin-bottom:8px;">`;
+  html += team==='home'
+    ? `<button class="btn small" onclick="toggleNameMerge()">${state.showingNameMerge?'選手名の編集を閉じる':'選手名を編集'}</button>`
+    : `<span></span>`;
+  html += `<button class="btn small" onclick="simpleStatsCSV(careerDetailedStatsForAllPlayers('${team}'), '個人通算成績')">⬆️ CSV</button></div>`;
+
+  if (team==='home' && state.showingNameMerge){
+    html += `<div class="card" style="margin-bottom:12px;">
+      <p class="muted" style="margin-bottom:8px;">表記ゆれや同一選手の重複登録は、名前を編集して統合できます。</p>
+      ${renderNameMergeList()}
+    </div>`;
+  }
+  html += all.length ? statsRowsHtml(all) : '<p class="muted">まだ記録がありません</p>';
+  return html;
+}
+
+/* ---- 選手名の統合・編集（自チームのみ、promptは使わずインライン編集） ---- */
+
+function toggleNameMerge(){ state.showingNameMerge = !state.showingNameMerge; render(); }
+function startEditAlias(name){ state.editingAliasFor = name; state.aliasDraft = state.playerNameAliases[name] || name; render(); }
+function cancelEditAlias(){ state.editingAliasFor = null; render(); }
+function confirmEditAlias(){
+  const name = state.editingAliasFor;
+  const trimmed = (state.aliasDraft||'').trim();
+  if (!trimmed || trimmed===name) delete state.playerNameAliases[name];
+  else state.playerNameAliases[name] = trimmed;
+  state.editingAliasFor = null;
+  render();
+}
+function renderNameMergeList(){
+  const names = allTimeHomePlayerNames();
+  if (names.length===0) return '<p class="muted">まだ記録がありません</p>';
+  return names.map(n=>{
+    if (state.editingAliasFor===n){
+      return `
+      <div class="list-item">
+        <input class="field grow-text" value="${esc(state.aliasDraft||'')}" oninput="state.aliasDraft=this.value"
+          onkeydown="if(event.key==='Enter'){confirmEditAlias();}">
+        <button class="btn small primary" onclick="confirmEditAlias()">保存</button>
+        <button class="btn small" onclick="cancelEditAlias()">取消</button>
+      </div>`;
+    }
+    return `
+    <div class="list-item">
+      <span class="grow-text">${esc(n)}${state.playerNameAliases[n] ? ' → <strong style="color:var(--blue)">'+esc(state.playerNameAliases[n])+'</strong>' : ''}</span>
+      <button class="btn small" onclick="startEditAlias('${n.replace(/'/g,"\\'")}')">編集</button>
+    </div>`;
+  }).join('');
+}
+
+/* ---- CSV出力 ---- */
+
+function renderCsvTab(team){
+  const matches = [];
+  const current = currentAsMatchRecord();
+  if (current) matches.push({id:'current', label:'進行中：'+state.homeTeamName+' vs '+state.awayTeamName});
+  state.matchHistory.forEach(m=>matches.push({id:m.id, label:new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName}));
+
+  let html = `<p class="muted">出力する試合を選んでください（複数選択可）。${team==='home'?state.homeTeamName:state.awayTeamName}の選手ごとに1つのCSVファイルが作成されます。</p>`;
+  html += matches.map(m=>`
+    <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
+      <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(m.label)}
+    </label>`).join('') || '<p class="muted">まだ試合記録がありません</p>';
+  html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport(true,'${team}')">📁 フォルダに保存する</button>`;
+  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExport(false,'${team}')">個別にダウンロードする</button>`;
+  html += `<p class="muted" style="margin-top:8px;">「フォルダに保存する」はChrome/Edgeなど対応ブラウザで実際のフォルダに選手ごとのCSVをまとめて書き出せます。非対応の場合は自動的に個別ダウンロードになります。</p>`;
+  return html;
+}
+function runCsvExport(toFolder, team){
+  const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
+  if (ids.length===0){ showToast('試合を選択してください'); return; }
+  if (toFolder) exportDetailedCSVToFolder(ids, team);
+  else exportDetailedCSV(ids, team);
+}
+
+/* ==================== ランキング ==================== */
+
+function rankingRow(name, primaryValue, primaryText, detail){ return {name, primaryValue, primaryText, detail}; }
+
+function renderRankingList(rows, metricLabel){
+  const sorted = rows.slice().sort((a,b)=>(b.primaryValue===null?-1:b.primaryValue)-(a.primaryValue===null?-1:a.primaryValue));
+  if (sorted.length===0) return '<p class="muted">まだ記録がありません</p>';
+  return sorted.map((r,i)=>`
+    <div class="row" style="justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--line);">
+      <div class="row gap10">
+        <strong style="width:24px;color:${i===0?'#f59e0b':'#6b7280'}">${i+1}</strong>
+        <div class="col">
+          <span style="font-weight:600;">${esc(r.name)}</span>
+          <span class="muted" style="font-size:11px;">${esc(r.detail)}</span>
+        </div>
+      </div>
+      <div class="col" style="align-items:flex-end;">
+        <strong>${esc(r.primaryText)}</strong>
+        <span class="muted" style="font-size:11px;">${esc(metricLabel)}</span>
+      </div>
+    </div>`).join('');
+}
+function scopePickerHtml(field, options){
+  return `
+  <select class="field" style="max-width:220px;margin-bottom:10px;" onchange="state.${field}=this.value; render();">
+    ${options.map(o=>`<option value="${esc(o)}" ${state[field]===o?'selected':''}>${esc(o)}</option>`).join('')}
+  </select>`;
+}
+
+/// 通算ランキング（自チーム/相手チーム、これまでの全試合を対象）
+function renderRankingsBody(team){
+  const all = careerDetailedStatsForAllPlayers(team);
+  return renderRankingsBodyForList(all, allUsedCombos(team), allUsedOpponentServeTypes(team), allUsedOpponentAttackTypes(team), 'career');
+}
+
+/// 通算/単一試合どちらでも使える、ランキング本体のレンダリング。
+/// スコープの選択肢自体を引数で渡すため、通算・試合どちらでも同じ状態キーを使い回せる。
+
+function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackTypesScope){
+  const rt = state.rankingsTab || 'spike';
+  const tabs = [['spike','スパイク'],['serve','サーブ'],['catch','キャッチ'],['receive','レシーブ'],['toss','トス'],['block','ブロック']];
+  let html = `<div class="tabbar" style="margin-bottom:12px;">
+    ${tabs.map(([k,label])=>`<button class="${rt===k?'active':''}" onclick="state.rankingsTab='${k}'; render();">${label}</button>`).join('')}
+  </div>`;
+
+  if (rt==='spike'){
+    if (!state.spikeScope) state.spikeScope='総合';
+    const scopes = ['総合', ...combosScope];
+    html += scopePickerHtml('spikeScope', scopes);
+    const rows = all.map(s=>{
+      const target = state.spikeScope==='総合' ? s.spikeOverall : s.spikeByCombo.find(c=>c.name===state.spikeScope);
+      if (!target || target.total===0) return null;
+      return rankingRow(s.player.name, target.decisionRate, pct(target.decisionRate), `総数${target.total}　決定${target.decided}　ミス${target.miss}`);
+    }).filter(Boolean);
+    html += renderRankingList(rows, '決定率');
+  } else if (rt==='serve'){
+    const rows = all.filter(s=>s.serve.total>0).map(s=>
+      rankingRow(s.player.name, s.serve.effectiveRate, pct(s.serve.effectiveRate), `総数${s.serve.total}　決定${s.serve.decided}　効果${s.serve.effective}　ミス${s.serve.miss}`));
+    html += renderRankingList(rows, '効果率');
+  } else if (rt==='catch'){
+    if (!state.catchScope) state.catchScope='総合';
+    const scopes = ['総合', ...serveTypesScope];
+    html += scopePickerHtml('catchScope', scopes);
+    const rows = all.map(s=>{
+      const target = state.catchScope==='総合' ? s.serveReceiveOverall : s.serveReceiveByType.find(c=>c.name===state.catchScope);
+      if (!target || target.total===0) return null;
+      return rankingRow(s.player.name, target.aPassRate, pct(target.aPassRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
+    }).filter(Boolean);
+    html += renderRankingList(rows, 'Aパス率');
+  } else if (rt==='receive'){
+    if (!state.receiveScope) state.receiveScope='総合';
+    const scopes = ['総合', ...attackTypesScope];
+    html += scopePickerHtml('receiveScope', scopes);
+    const rows = all.map(s=>{
+      const target = state.receiveScope==='総合' ? s.receiveOverall : s.receiveByType.find(c=>c.name===state.receiveScope);
+      if (!target || target.total===0) return null;
+      return rankingRow(s.player.name, target.aPassRate, pct(target.aPassRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
+    }).filter(Boolean);
+    html += renderRankingList(rows, 'Aパス率');
+  } else if (rt==='toss'){
+    const rows = all.filter(s=>s.toss.total>0).map(s=>
+      rankingRow(s.player.name, s.toss.successRate, pct(s.toss.successRate), `本数${s.toss.total}　成功${s.toss.success}　失敗${s.toss.failure}　ミス${s.toss.miss}`));
+    html += renderRankingList(rows, '成功率');
+  } else if (rt==='block'){
+    const rows = all.filter(s=>s.block.decided>0).map(s=>
+      rankingRow(s.player.name, s.block.perSet, num(s.block.perSet,2), `決定本数${s.block.decided}　出場セット${s.block.setsPlayed}`));
+    html += renderRankingList(rows, 'セットあたり');
+  }
+  return html;
+}
+
+/* ==================== ゲーム準備 ==================== */
 
 function toggleMyTeam(name){ state.myTeamName = state.myTeamName===name ? null : name; render(); }
 
-function renameTeam(oldName){
-  const newName = window.prompt('新しいチーム名', oldName);
-  if (!newName || !newName.trim() || newName.trim()===oldName) return;
-  const trimmed = newName.trim();
-  state.knownTeamNames = state.knownTeamNames.map(n=>n===oldName?trimmed:n);
-  if (state.teamRosters[oldName]){ state.teamRosters[trimmed] = state.teamRosters[oldName]; delete state.teamRosters[oldName]; }
-  if (state.myTeamName===oldName) state.myTeamName = trimmed;
-  if (state.homeTeamName===oldName) state.homeTeamName = trimmed;
-  if (state.awayTeamName===oldName) state.awayTeamName = trimmed;
+function startRenameTeam(name){ state.editingTeamName = name; state.teamNameDraft = name; render(); }
+function cancelRenameTeam(){ state.editingTeamName = null; render(); }
+function confirmRenameTeam(){
+  const oldName = state.editingTeamName;
+  const newName = (state.teamNameDraft||'').trim();
+  if (!newName){ showToast('チーム名を入力してください'); return; }
+  if (newName!==oldName){
+    state.knownTeamNames = state.knownTeamNames.map(n=>n===oldName?newName:n);
+    if (state.teamRosters[oldName]){ state.teamRosters[newName]=state.teamRosters[oldName]; delete state.teamRosters[oldName]; }
+    if (state.myTeamName===oldName) state.myTeamName = newName;
+    if (state.homeTeamName===oldName) state.homeTeamName = newName;
+    if (state.awayTeamName===oldName) state.awayTeamName = newName;
+  }
+  state.editingTeamName = null;
   render();
 }
 
-function deleteTeamName(name){
-  if (!confirm('「'+name+'」を削除しますか？')) return;
+function startAddTeamInPrep(){ state.gamePrepAddingTeam = true; state.newNameDraft=''; render(); }
+function cancelAddTeamInPrep(){ state.gamePrepAddingTeam = false; render(); }
+function confirmAddTeamInPrep(){
+  const name = (state.newNameDraft||'').trim();
+  if (!name){ showToast('チーム名を入力してください'); return; }
+  registerTeamName(name);
+  state.gamePrepAddingTeam = false;
+  render();
+}
+
+function deleteTeamNameConfirmed(name){
   state.knownTeamNames = state.knownTeamNames.filter(n=>n!==name);
   delete state.teamRosters[name];
   if (state.myTeamName===name) state.myTeamName = null;
-  render();
-}
-
-function addNewTeamName(){
-  const name = window.prompt('新しいチーム名を入力してください');
-  if (name && name.trim()) registerTeamName(name.trim());
   render();
 }
 
@@ -238,7 +501,6 @@ function toggleRosterEditor(name){
   state.gamePrepExpandedTeam = state.gamePrepExpandedTeam===name ? null : name;
   render();
 }
-
 function addRosterPlayer(teamName){
   const roster = state.teamRosters[teamName] || (state.teamRosters[teamName]=[]);
   const used = new Set(roster.map(p=>p.number));
@@ -246,17 +508,25 @@ function addRosterPlayer(teamName){
   roster.push({id:uid(), number:n, name:'新しい選手', position:'OH'});
   render();
 }
-
-function updateRosterPlayer(teamName, id, field, value){
-  const roster = state.teamRosters[teamName]||[];
+function updateRosterPlayerName(teamName, id, value){
+  const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
+  if (p){ p.name = value; save(); }
+}
+function updateRosterPlayerPosition(teamName, id, value){
+  const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
+  if (p){ p.position = value; render(); }
+}
+/// 背番号は重複を許さない。onchange（入力し終えたタイミング）で検証し、
+/// 重複していれば変更を取り消して警告を表示する。
+function updateRosterPlayerNumber(teamName, id, value){
+  const roster = state.teamRosters[teamName] || [];
   const p = roster.find(p=>p.id===id);
   if (!p) return;
-  if (field==='number') p.number = parseInt(value,10)||0; else p[field]=value;
-  save();
-}
-
-function deleteRosterPlayer(teamName, id){
-  state.teamRosters[teamName] = (state.teamRosters[teamName]||[]).filter(p=>p.id!==id);
+  const newNumber = parseInt(value,10);
+  if (!newNumber || newNumber<1){ showToast('背番号は1以上の数字で入力してください'); render(); return; }
+  const duplicate = roster.some(other=>other.id!==id && other.number===newNumber);
+  if (duplicate){ showToast('その背番号はすでに使われています'); render(); return; }
+  p.number = newNumber;
   render();
 }
 
@@ -266,42 +536,71 @@ function renderRosterEditor(teamName){
   <div class="card" style="margin:8px 0;">
     ${roster.map(p=>`
       <div class="row gap8" style="margin-bottom:6px;">
-        <input class="field" style="width:50px;" type="number" value="${p.number}"
-          oninput="updateRosterPlayer('${teamName}','${p.id}','number',this.value)">
+        <input class="field" style="width:64px;" type="number" min="1" value="${p.number}"
+          onchange="updateRosterPlayerNumber('${teamName}','${p.id}',this.value)">
         <input class="field grow" value="${esc(p.name)}"
-          oninput="updateRosterPlayer('${teamName}','${p.id}','name',this.value)">
-        <select class="field" style="width:90px;" onchange="updateRosterPlayer('${teamName}','${p.id}','position',this.value); render();">
+          oninput="updateRosterPlayerName('${teamName}','${p.id}',this.value)">
+        <select class="field" style="width:90px;" onchange="updateRosterPlayerPosition('${teamName}','${p.id}',this.value)">
           ${POSITIONS.map(pos=>`<option value="${pos}" ${p.position===pos?'selected':''}>${pos}</option>`).join('')}
         </select>
-        <button class="btn small danger" onclick="deleteRosterPlayer('${teamName}','${p.id}')">削除</button>
+        ${confirmButtonHtml('delPlayer-'+p.id, '削除', "deleteRosterPlayer('"+teamName+"','"+p.id+"');", 'danger small')}
       </div>`).join('') || '<p class="muted">まだ選手が登録されていません</p>'}
     <button class="btn" style="width:100%;" onclick="addRosterPlayer('${teamName}')">＋ 選手を追加</button>
   </div>`;
 }
+function deleteRosterPlayer(teamName, id){
+  state.teamRosters[teamName] = (state.teamRosters[teamName]||[]).filter(p=>p.id!==id);
+  render();
+}
 
 function renderGamePrepSheet(){
-  const body = `
-    <h3>登録チーム</h3>
-    ${state.knownTeamNames.map(name=>`
+  let body = `<h3>登録チーム</h3>`;
+  body += state.knownTeamNames.map(name=>{
+    if (state.editingTeamName===name){
+      return `
+      <div class="card" style="margin-bottom:8px;">
+        <div class="inline-add">
+          <input class="field grow" value="${esc(state.teamNameDraft||'')}" oninput="state.teamNameDraft=this.value"
+            onkeydown="if(event.key==='Enter'){confirmRenameTeam();}">
+          <button class="btn primary" onclick="confirmRenameTeam()">保存</button>
+          <button class="btn" onclick="cancelRenameTeam()">キャンセル</button>
+        </div>
+      </div>`;
+    }
+    return `
       <div class="card" style="margin-bottom:8px;">
         <div class="row gap8">
-          <button onclick="toggleMyTeam('${name}')" title="自チームに設定">${state.myTeamName===name?'✅':'⚪️'}</button>
-          <button class="grow" style="text-align:left;font-weight:600;" onclick="toggleRosterEditor('${name}')">
+          <button onclick="toggleMyTeam('${name.replace(/'/g,"\\'")}')" title="自チームに設定">${state.myTeamName===name?'✅':'⚪️'}</button>
+          <button class="grow" style="text-align:left;font-weight:600;" onclick="toggleRosterEditor('${name.replace(/'/g,"\\'")}')">
             ${esc(name)} <span class="muted">（選手${(state.teamRosters[name]||[]).length}人）</span>
             ${state.myTeamName===name?'<span style="color:var(--blue);"> 自チーム</span>':''}
           </button>
-          <button class="btn small" onclick="renameTeam('${name}')">✏️</button>
-          <button class="btn small danger" onclick="deleteTeamName('${name}')">🗑️</button>
+          <button class="btn small" onclick="startRenameTeam('${name.replace(/'/g,"\\'")}')">✏️</button>
+          ${confirmButtonHtml('delTeam-'+name, '🗑️', "deleteTeamNameConfirmed('"+name.replace(/'/g,"\\'")+"');", 'danger small')}
         </div>
         ${state.gamePrepExpandedTeam===name ? renderRosterEditor(name) : ''}
-      </div>`).join('')}
-    <button class="btn primary" style="width:100%;margin-top:8px;" onclick="addNewTeamName()">＋ 新しいチームを登録</button>
-    <p class="muted" style="margin-top:12px;">チーム名をタップすると選手名簿を編集できます。マークをタップすると自チームの設定を切り替えられます。自チームは試合開始のチーム名選択で常に一番上に表示されます。</p>
-  `;
+      </div>`;
+  }).join('');
+
+  if (state.gamePrepAddingTeam){
+    body += `
+    <div class="card" style="margin-top:8px;">
+      <div class="inline-add">
+        <input class="field grow" placeholder="新しいチーム名" value="${esc(state.newNameDraft||'')}"
+          oninput="state.newNameDraft=this.value" onkeydown="if(event.key==='Enter'){confirmAddTeamInPrep();}">
+        <button class="btn primary" onclick="confirmAddTeamInPrep()">追加</button>
+        <button class="btn" onclick="cancelAddTeamInPrep()">キャンセル</button>
+      </div>
+    </div>`;
+  } else {
+    body += `<button class="btn primary" style="width:100%;margin-top:8px;" onclick="startAddTeamInPrep()">＋ 新しいチームを登録</button>`;
+  }
+
+  body += `<p class="muted" style="margin-top:12px;">チーム名をタップすると選手名簿を編集できます。マークをタップすると自チームの設定を切り替えられます。自チームは試合開始のチーム名選択で常に一番上に表示されます。</p>`;
   return sheetShell('ゲーム準備', body, 'max-width:700px;');
 }
 
-/* ---- メンバーチェンジ ---- */
+/* ==================== メンバーチェンジ ==================== */
 
 function renderSubstitutionSheet(){
   const team = state.subTeam || 'home';
@@ -315,7 +614,7 @@ function renderSubstitutionSheet(){
   const slot = (i)=>{
     const p = players.find(p=>p.id===rotation[i]);
     return `
-      <button class="mini-slot ${p?'filled':''} ${selIndex===i?'':''}" style="${selIndex===i?'outline:3px solid #facc15;':''}"
+      <button class="mini-slot ${p?'filled':''}" style="${selIndex===i?'outline:3px solid #facc15;':''}"
         onclick="state.subPositionIndex=${i}; render();">
         <div class="c">${p?p.number:'-'}</div>
         <div style="font-size:9px;">P${i+1}</div>
@@ -341,116 +640,4 @@ function renderSubstitutionSheet(){
     ` : ''}
   `;
   return sheetShell('メンバーチェンジ', body, 'max-width:500px;');
-}
-
-/* ========================= 起動 ========================= */
-
-/* ========================= 選手名の統合・編集 ========================= */
-
-function toggleNameMerge(){ state.showingNameMerge = !state.showingNameMerge; render(); }
-
-function editAlias(name){
-  const current = state.playerNameAliases[name] || name;
-  const newName = window.prompt('「'+name+'」として記録された成績を、どの名前に統合しますか？\n既存の選手名と同じにすると成績が合算されます。', current);
-  if (newName===null) return;
-  const trimmed = newName.trim();
-  if (!trimmed || trimmed===name) delete state.playerNameAliases[name];
-  else state.playerNameAliases[name] = trimmed;
-  render();
-}
-
-function renderNameMergeList(){
-  const names = allTimeHomePlayerNames();
-  if (names.length===0) return '<p class="muted">まだ記録がありません</p>';
-  return names.map(n=>`
-    <div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);">
-      <span>${esc(n)}${state.playerNameAliases[n] ? ' → <strong style="color:var(--blue)">'+esc(state.playerNameAliases[n])+'</strong>' : ''}</span>
-      <button class="btn small" onclick="editAlias('${n.replace(/'/g,"\\'")}')">編集</button>
-    </div>`).join('');
-}
-
-/* ========================= ランキング ========================= */
-
-function rankingRow(name, primaryValue, primaryText, detail){
-  return {name, primaryValue, primaryText, detail};
-}
-
-function renderRankingList(rows, metricLabel){
-  const sorted = rows.slice().sort((a,b)=>(b.primaryValue===null?-1:b.primaryValue)-(a.primaryValue===null?-1:a.primaryValue));
-  if (sorted.length===0) return '<p class="muted">まだ記録がありません</p>';
-  return sorted.map((r,i)=>`
-    <div class="row" style="justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--line);">
-      <div class="row gap10">
-        <strong style="width:24px;color:${i===0?'#f59e0b':'#6b7280'}">${i+1}</strong>
-        <div class="col">
-          <span style="font-weight:600;">${esc(r.name)}</span>
-          <span class="muted" style="font-size:11px;">${esc(r.detail)}</span>
-        </div>
-      </div>
-      <div class="col" style="align-items:flex-end;">
-        <strong>${esc(r.primaryText)}</strong>
-        <span class="muted" style="font-size:11px;">${esc(metricLabel)}</span>
-      </div>
-    </div>`).join('');
-}
-
-function scopePickerHtml(field, options){
-  return `
-  <select class="field" style="max-width:220px;margin-bottom:10px;" onchange="state.${field}=this.value; render();">
-    ${options.map(o=>`<option value="${esc(o)}" ${state[field]===o?'selected':''}>${esc(o)}</option>`).join('')}
-  </select>`;
-}
-
-function renderRankingsBody(){
-  const rt = state.rankingsTab || 'spike';
-  const tabs = [['spike','スパイク'],['serve','サーブ'],['catch','キャッチ'],['receive','レシーブ'],['toss','トス'],['block','ブロック']];
-  let html = `<div class="tabbar" style="margin-bottom:12px;">
-    ${tabs.map(([k,label])=>`<button class="${rt===k?'active':''}" onclick="state.rankingsTab='${k}'; render();">${label}</button>`).join('')}
-  </div>`;
-  const all = careerDetailedStatsForAllPlayers();
-
-  if (rt==='spike'){
-    if (!state.spikeScope) state.spikeScope='総合';
-    const scopes = ['総合', ...allUsedCombos()];
-    html += scopePickerHtml('spikeScope', scopes);
-    const rows = all.map(s=>{
-      const target = state.spikeScope==='総合' ? s.spikeOverall : s.spikeByCombo.find(c=>c.name===state.spikeScope);
-      if (!target || target.total===0) return null;
-      return rankingRow(s.player.name, target.decisionRate, pct(target.decisionRate), `総数${target.total}　決定${target.decided}　ミス${target.miss}`);
-    }).filter(Boolean);
-    html += renderRankingList(rows, '決定率');
-  } else if (rt==='serve'){
-    const rows = all.filter(s=>s.serve.total>0).map(s=>
-      rankingRow(s.player.name, s.serve.effectiveRate, pct(s.serve.effectiveRate), `総数${s.serve.total}　決定${s.serve.decided}　効果${s.serve.effective}　ミス${s.serve.miss}`));
-    html += renderRankingList(rows, '効果率');
-  } else if (rt==='catch'){
-    if (!state.catchScope) state.catchScope='総合';
-    const scopes = ['総合', ...allUsedOpponentServeTypes()];
-    html += scopePickerHtml('catchScope', scopes);
-    const rows = all.map(s=>{
-      const target = state.catchScope==='総合' ? s.serveReceiveOverall : s.serveReceiveByType.find(c=>c.name===state.catchScope);
-      if (!target || target.total===0) return null;
-      return rankingRow(s.player.name, target.aPassRate, pct(target.aPassRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
-    }).filter(Boolean);
-    html += renderRankingList(rows, 'Aパス率');
-  } else if (rt==='receive'){
-    if (!state.receiveScope) state.receiveScope='総合';
-    const scopes = ['総合', ...allUsedOpponentAttackTypes()];
-    html += scopePickerHtml('receiveScope', scopes);
-    const rows = all.map(s=>{
-      const target = state.receiveScope==='総合' ? s.receiveOverall : s.receiveByType.find(c=>c.name===state.receiveScope);
-      if (!target || target.total===0) return null;
-      return rankingRow(s.player.name, target.aPassRate, pct(target.aPassRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
-    }).filter(Boolean);
-    html += renderRankingList(rows, 'Aパス率');
-  } else if (rt==='toss'){
-    const rows = all.filter(s=>s.toss.total>0).map(s=>
-      rankingRow(s.player.name, s.toss.successRate, pct(s.toss.successRate), `本数${s.toss.total}　成功${s.toss.success}　失敗${s.toss.failure}　ミス${s.toss.miss}`));
-    html += renderRankingList(rows, '成功率');
-  } else if (rt==='block'){
-    const rows = all.filter(s=>s.block.decided>0).map(s=>
-      rankingRow(s.player.name, s.block.perSet, num(s.block.perSet,2), `決定本数${s.block.decided}　出場セット${s.block.setsPlayed}`));
-    html += renderRankingList(rows, 'セットあたり');
-  }
-  return html;
 }

@@ -32,12 +32,13 @@ function downloadText(text, filename){
   URL.revokeObjectURL(url);
 }
 
-function detailedMatchCSV(match, playerName){
-  const events = match.rallyLog.filter(e=>e.team==='home' && (state.playerNameAliases[e.playerName]||e.playerName)===playerName);
+function detailedMatchCSV(match, playerName, team){
+  const events = match.rallyLog.filter(e=>e.team===team && (state.playerNameAliases[e.playerName]||e.playerName)===playerName);
   if (events.length===0) return '';
   let out = '';
   out += '試合日,'+new Date(match.date).toLocaleDateString('ja-JP')+'\n';
   if (match.tournamentName) out += '大会名,'+csvEscape(match.tournamentName)+'\n';
+  out += '対象チーム,'+(team==='home'?csvEscape(match.homeTeamName)+'（自チーム）':csvEscape(match.awayTeamName)+'（相手チーム）')+'\n';
   out += '自チーム,'+csvEscape(match.homeTeamName)+'\n';
   out += '相手チーム,'+csvEscape(match.awayTeamName)+'\n';
   out += '試合形式,'+(match.matchFormat==='official'?'公式試合':'練習試合')+'\n';
@@ -115,20 +116,20 @@ function collectMatchesForExport(matchIds){
   return matches;
 }
 
-function collectPlayerNamesForMatches(matches){
+function collectPlayerNamesForMatches(matches, team){
   const names = []; const seen = new Set();
   matches.forEach(m=>m.rallyLog.forEach(e=>{
-    if (e.team!=='home') return;
+    if (e.team!==team) return;
     const n = state.playerNameAliases[e.playerName]||e.playerName;
     if (!seen.has(n)){ seen.add(n); names.push(n); }
   }));
   return names;
 }
 
-function buildPlayerCsvForMatches(matches, name){
+function buildPlayerCsvForMatches(matches, name, team){
   let matchNum = 0; let body = '';
   matches.forEach(m=>{
-    const section = detailedMatchCSV(m, name);
+    const section = detailedMatchCSV(m, name, team);
     if (section){ matchNum++; body += '【第'+matchNum+'試合】\n'+section; }
   });
   if (!body) return null;
@@ -138,12 +139,13 @@ function buildPlayerCsvForMatches(matches, name){
 
 /// ブラウザがフォルダ保存に対応していない場合のフォールバック：1件ずつダウンロードする
 
-function exportDetailedCSV(matchIds){
+function exportDetailedCSV(matchIds, team){
+  team = team || 'home';
   const matches = collectMatchesForExport(matchIds);
-  if (matches.length===0){ alert('試合を選択してください'); return; }
-  const names = collectPlayerNamesForMatches(matches);
+  if (matches.length===0){ showToast('試合を選択してください'); return; }
+  const names = collectPlayerNamesForMatches(matches, team);
   names.forEach(name=>{
-    const body = buildPlayerCsvForMatches(matches, name);
+    const body = buildPlayerCsvForMatches(matches, name, team);
     if (body) downloadText(body, name.replace(/[\/:]/g,'_')+'.csv');
   });
 }
@@ -151,22 +153,23 @@ function exportDetailedCSV(matchIds){
 /// File System Access API に対応したブラウザでは、実際にフォルダを選んでその中に
 /// 選手ごとのCSVをまとめて書き出す。未対応ブラウザでは自動的に個別ダウンロードにフォールバックする。
 
-async function exportDetailedCSVToFolder(matchIds){
+async function exportDetailedCSVToFolder(matchIds, team){
+  team = team || 'home';
   const matches = collectMatchesForExport(matchIds);
-  if (matches.length===0){ alert('試合を選択してください'); return; }
+  if (matches.length===0){ showToast('試合を選択してください'); return; }
 
   if (!window.showDirectoryPicker){
-    exportDetailedCSV(matchIds);
-    alert('お使いのブラウザはフォルダへの直接保存に対応していないため、選手ごとに個別のファイルとしてダウンロードしました。');
+    exportDetailedCSV(matchIds, team);
+    showToast('お使いのブラウザはフォルダへの直接保存に対応していないため、個別のファイルとしてダウンロードしました。');
     return;
   }
 
-  const names = collectPlayerNamesForMatches(matches);
+  const names = collectPlayerNamesForMatches(matches, team);
   try{
     const dirHandle = await window.showDirectoryPicker();
     let written = 0;
     for (const name of names){
-      const body = buildPlayerCsvForMatches(matches, name);
+      const body = buildPlayerCsvForMatches(matches, name, team);
       if (!body) continue;
       const fileHandle = await dirHandle.getFileHandle(name.replace(/[\/:]/g,'_')+'.csv', {create:true});
       const writable = await fileHandle.createWritable();
@@ -174,12 +177,10 @@ async function exportDetailedCSVToFolder(matchIds){
       await writable.close();
       written++;
     }
-    alert(written+'件のCSVをフォルダに保存しました。');
+    showToast(written+'件のCSVをフォルダに保存しました。');
   }catch(err){
     if (err && err.name==='AbortError') return;
-    alert('フォルダへの保存に失敗しました。個別ダウンロードに切り替えます。');
-    exportDetailedCSV(matchIds);
+    showToast('フォルダへの保存に失敗しました。個別ダウンロードに切り替えます。');
+    exportDetailedCSV(matchIds, team);
   }
 }
-
-/* ========================= レンダリング：共通 ========================= */

@@ -246,7 +246,6 @@ function returnToHomeScreenReset(){ archiveCurrentMatchIfNeeded(); resetMatchSta
 function pauseAndReturnHome(){ state.screen='home'; render(); }
 
 function endCurrentGame(){
-  if (!confirm('この試合を終了しますか？記録は保存され、ホーム画面に戻ります。')) return;
   archiveCurrentMatchIfNeeded(); resetMatchState(); state.screen='home'; render();
 }
 

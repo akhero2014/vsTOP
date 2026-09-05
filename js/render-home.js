@@ -7,7 +7,8 @@ function renderHome(){
   <div class="screen home">
     <div class="home-card">
       <div class="home-logo">🏐</div>
-      <div class="home-title">バレーボール スタッツ</div>
+      <div class="home-title">vsTOP</div>
+      <p class="muted" style="margin-top:2px;">バレーボール スタッツ</p>
       ${state.myTeamName ? `<p class="muted">自チーム：${esc(state.myTeamName)}</p>` : ''}
       <div class="home-buttons">
         ${paused ? `
