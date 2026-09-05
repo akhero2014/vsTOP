@@ -1,21 +1,64 @@
-/* render-lineup.js — 試合開始設定（スタメン・サーブ権・大会名など）画面の描画
+/* render-lineup.js — 試合開始設定（スタメン・リベロ・サーブ権・大会名など）画面の描画
    vsTOP アプリの一部。index.html からこの順番で読み込まれる想定です。 */
 
 function lineupValid(){
   const homeOk = state.homeRotation.every(Boolean) && new Set(state.homeRotation).size===6;
-  if (!state.trackOpponentStats) return homeOk;
   const awayOk = state.awayRotation.every(Boolean) && new Set(state.awayRotation).size===6;
   return homeOk && awayOk;
 }
 
+/// 相手チームのスタッツを記録しない設定のとき、内部のローテーション/サーブ権処理のために
+/// 仮のスタメンとリベロ2名を自動で埋める（画面には出さず、裏側だけで整える）
+function autoFillAwayLineupIfNeeded(){
+  if (state.trackOpponentStats) return;
+  if (!(state.awayRotation.every(Boolean) && new Set(state.awayRotation).size===6)){
+    while (state.awayPlayers.length < 8){
+      const n = state.awayPlayers.length+1;
+      state.awayPlayers.push({id:uid(), number:n, name:'相手選手'+n, position:'OH'});
+    }
+    state.awayRotation = state.awayPlayers.slice(0,6).map(p=>p.id);
+  }
+  const selected = (state.awayLiberoSelection||[]).filter(Boolean);
+  if (selected.length < 2){
+    const usedIds = new Set(state.awayRotation);
+    let candidates = state.awayPlayers.filter(p=>!usedIds.has(p.id));
+    while (candidates.length < 2){
+      const n = state.awayPlayers.length+1;
+      const p = {id:uid(), number:n, name:'相手L'+n, position:'L'};
+      state.awayPlayers.push(p);
+      candidates.push(p);
+    }
+    state.awayLiberoSelection = [candidates[0].id, candidates[1].id];
+  }
+}
+
 function startMatch(){
-  if (!lineupValid()) return;
+  if (!lineupValid()){
+    showToast('両チームの6ポジションすべてに選手を設定してください');
+    return;
+  }
+  if (!state.trackOpponentStats) autoFillAwayLineupIfNeeded();
+
+  const homeLiberoCount = (state.homeLiberoSelection||[]).filter(Boolean).length;
+  const awayLiberoCount = state.trackOpponentStats ? (state.awayLiberoSelection||[]).filter(Boolean).length : 2;
+  if (homeLiberoCount<2 || awayLiberoCount<2){
+    state.showLiberoWarning = true;
+    render();
+    return;
+  }
+  actuallyStartMatch();
+}
+function actuallyStartMatch(){
+  state.showLiberoWarning = false;
   state.showingStartingLineup = false;
   render();
 }
+function proceedWithoutFullLibero(){ actuallyStartMatch(); }
+function cancelLiberoWarning(){ state.showLiberoWarning = false; render(); }
+
+/* ---- 6ポジションの選手選択 ---- */
 
 function openLineupPicker(team, index){ state.lineupPicker = {team, index}; render(); }
-
 function pickLineupPlayer(playerId){
   const {team, index} = state.lineupPicker;
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
@@ -25,7 +68,6 @@ function pickLineupPlayer(playerId){
   state.lineupPicker = null;
   render();
 }
-
 function renderLineupSlot(team, index){
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
   const players = currentPlayers(team);
@@ -38,18 +80,29 @@ function renderLineupSlot(team, index){
     </button>`;
 }
 
-/// リベロは6ポジションの外側に、確認用として表示する（実際の登録はゲーム準備の選手編集で行う）
-function renderLineupLiberoBadge(team){
-  const l = liberos(team);
-  if (l.length===0){
-    return `<div class="mini-slot" style="opacity:.6;"><div class="c">-</div><div style="font-size:9px;">リベロ</div><div style="font-size:10px;">未登録</div></div>`;
-  }
-  return l.map((p,i)=>`
-    <div class="mini-slot filled" style="background:rgba(245,158,11,.35);">
-      <div class="c" style="background:#f59e0b;">${p.number}</div>
-      <div style="font-size:9px;">L${i+1}</div>
-      <div style="font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}</div>
-    </div>`).join('');
+/* ---- リベロ（L1/L2）の選手選択：6ポジションと同じくタップして選ぶ ---- */
+
+function openLineupLiberoPicker(team, index){ state.lineupLiberoPicker = {team, index}; render(); }
+function pickLineupLiberoPlayer(playerId){
+  const {team, index} = state.lineupLiberoPicker;
+  const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  const already = sel.indexOf(playerId);
+  if (already>=0) sel[already] = null;
+  sel[index] = playerId;
+  state.lineupLiberoPicker = null;
+  render();
+}
+function renderLineupLiberoSlot(team, index){
+  const players = currentPlayers(team);
+  const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  const player = players.find(p=>p.id===sel[index]);
+  return `
+    <button class="mini-slot ${player?'filled':''}" style="background:${player?'rgba(245,158,11,.5)':'rgba(0,0,0,.12)'};"
+      onclick="openLineupLiberoPicker('${team}', ${index})">
+      <div class="c" style="${player?'background:#f59e0b;':''}">${player ? player.number : '+'}</div>
+      <div style="font-size:9px;opacity:.85">L${index+1}</div>
+      <div style="font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${player?esc(player.name):'未設定'}</div>
+    </button>`;
 }
 
 function renderLineupCourt(team, title){
@@ -57,24 +110,27 @@ function renderLineupCourt(team, title){
   const back = team==='home' ? HOME_BACK : AWAY_BACK;
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
   const filled = rotation.filter(Boolean).length;
+  const liberoFilled = (team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection).filter(Boolean).length;
   return `
   <div>
     <div class="row" style="justify-content:space-between;margin-bottom:6px;">
       <strong>${esc(title)}</strong>
-      <span class="muted">${filled}/6 人設定済み</span>
+      <span class="muted">${filled}/6 人設定済み・L ${liberoFilled}/2</span>
     </div>
     <div class="mini-court">
       <div class="row gap8" style="margin-bottom:8px;">${front.map(i=>renderLineupSlot(team,i)).join('')}</div>
       <div class="row gap8">${back.map(i=>renderLineupSlot(team,i)).join('')}</div>
     </div>
     <div class="row gap8" style="margin-top:8px;">
-      <span class="muted" style="align-self:center;">リベロ：</span>
-      ${renderLineupLiberoBadge(team)}
+      <span class="muted" style="align-self:center;">L：</span>
+      ${renderLineupLiberoSlot(team,0)}
+      ${renderLineupLiberoSlot(team,1)}
     </div>
   </div>`;
 }
 
-/// チーム名／大会名のプルダウン＋「＋」新規追加（promptは使わず、押すとインラインの入力欄が開く）
+/* ---- チーム名／大会名のプルダウン＋新規追加＋その場で修正 ---- */
+
 function teamPickerHtml(team){
   const label = team==='home' ? '自チーム' : '相手チーム';
   const currentName = team==='home' ? state.homeTeamName : state.awayTeamName;
@@ -92,6 +148,18 @@ function teamPickerHtml(team){
       </div>
     </div>`;
   }
+  if (state.editingTeamName===currentName){
+    return `
+    <div class="col grow" style="min-width:200px;">
+      <label class="muted">${label}（修正）</label>
+      <div class="inline-add">
+        <input class="field grow" value="${esc(state.teamNameDraft||'')}" oninput="state.teamNameDraft=this.value"
+          onkeydown="if(event.key==='Enter'){confirmRenameTeam();}">
+        <button class="btn primary" onclick="confirmRenameTeam()">保存</button>
+        <button class="btn" onclick="cancelRenameTeam()">キャンセル</button>
+      </div>
+    </div>`;
+  }
   return `
   <div class="col grow" style="min-width:200px;">
     <label class="muted">${label}</label>
@@ -100,6 +168,7 @@ function teamPickerHtml(team){
         ${names.map(n=>`<option value="${esc(n)}" ${n===currentName?'selected':''}>${esc(n)}</option>`).join('')}
       </select>
       <button class="btn" onclick="startAddTeamName('${team}')" title="新規チームを追加">＋</button>
+      <button class="btn" onclick="startRenameTeam('${currentName.replace(/'/g,"\\'")}')" title="この名前を修正">✏️</button>
     </div>
   </div>`;
 }
@@ -116,6 +185,18 @@ function tournamentPickerHtml(){
       </div>
     </div>`;
   }
+  if (state.editingTournament){
+    return `
+    <div class="col grow" style="min-width:200px;">
+      <label class="muted">大会名（修正）</label>
+      <div class="inline-add">
+        <input class="field grow" value="${esc(state.tournamentNameDraft||'')}" oninput="state.tournamentNameDraft=this.value"
+          onkeydown="if(event.key==='Enter'){confirmRenameTournament();}">
+        <button class="btn primary" onclick="confirmRenameTournament()">保存</button>
+        <button class="btn" onclick="cancelRenameTournament()">キャンセル</button>
+      </div>
+    </div>`;
+  }
   return `
   <div class="col grow" style="min-width:200px;">
     <label class="muted">大会名（任意）</label>
@@ -125,6 +206,7 @@ function tournamentPickerHtml(){
         ${state.knownTournamentNames.map(n=>`<option value="${esc(n)}" ${n===state.tournamentName?'selected':''}>${esc(n)}</option>`).join('')}
       </select>
       <button class="btn" onclick="startAddTournament()" title="新しい大会名を追加">＋</button>
+      ${state.tournamentName ? `<button class="btn" onclick="startRenameTournament()" title="この名前を修正">✏️</button>` : ''}
     </div>
   </div>`;
 }
@@ -138,7 +220,7 @@ function renderLineup(){
     </div>
     <div class="scroll grow">
       <div class="lineup-top">
-        <p class="muted">試合開始前にスターティングメンバーとサーブ権を設定してください。ポジションをタップして選手を選びます。</p>
+        <p class="muted">試合開始前にスターティングメンバー・リベロ・サーブ権を設定してください。ポジションをタップして選手を選びます。</p>
 
         <div class="row gap16" style="flex-wrap:wrap;">
           ${tournamentPickerHtml()}
@@ -162,6 +244,7 @@ function renderLineup(){
             <div class="switch ${state.trackOpponentStats?'on':''}" onclick="state.trackOpponentStats=!state.trackOpponentStats; render();"></div>
           </div>
         </div>
+        ${!state.trackOpponentStats ? '<p class="muted">オフの場合、相手チームのスタメン・リベロは試合開始時に自動で仮設定されます（画面には表示されません）。</p>' : ''}
       </div>
 
       <div class="lineup-cols">
@@ -184,6 +267,8 @@ function renderLineup(){
       </div>
     </div>
     ${state.lineupPicker ? renderLineupPickerSheet() : ''}
+    ${state.lineupLiberoPicker ? renderLineupLiberoPickerSheet() : ''}
+    ${state.showLiberoWarning ? renderLiberoWarningOverlay() : ''}
   </div>`;
 }
 
@@ -200,6 +285,38 @@ function renderLineupPickerSheet(){
             onclick="pickLineupPlayer('${p.id}')">
             <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(p.position)}</span>
           </button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+function renderLineupLiberoPickerSheet(){
+  const {team} = state.lineupLiberoPicker;
+  const players = currentPlayers(team);
+  return `
+  <div class="overlay" onclick="if(event.target===this){state.lineupLiberoPicker=null; render();}">
+    <div class="sheet" style="max-width:420px;">
+      <div class="sheet-header"><h2>リベロを選択</h2><button class="sheet-close" onclick="state.lineupLiberoPicker=null; render();">閉じる</button></div>
+      <div class="sheet-body">
+        ${players.map(p=>`
+          <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;"
+            onclick="pickLineupLiberoPlayer('${p.id}')">
+            <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(p.position)}</span>
+          </button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+function renderLiberoWarningOverlay(){
+  return `
+  <div class="overlay">
+    <div class="sheet" style="max-width:380px;">
+      <div class="sheet-body col gap16" style="text-align:center;">
+        <h2>リベロが2名登録されていません</h2>
+        <p class="muted">リベロ(L)が2名選ばれていませんが、このまま試合を開始しますか？</p>
+        <div class="col gap10">
+          <button class="btn primary" onclick="proceedWithoutFullLibero()">このまま開始する</button>
+          <button class="btn" onclick="cancelLiberoWarning()">戻って設定する</button>
+        </div>
       </div>
     </div>
   </div>`;

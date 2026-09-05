@@ -72,6 +72,11 @@ function substitute(team, positionIndex, incomingId){
   render();
 }
 
-function liberos(team){ return currentPlayers(team).filter(p=>p.position==='L'); }
+/// リベロ(L1/L2)は名簿の「ポジション」欄ではなく、試合開始設定でその試合ごとに選んだ2名を使う
+function liberos(team){
+  const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  return (sel||[]).map(id => id ? findPlayer(id, team) : null).filter(Boolean);
+}
+function liberoSelection(team){ return team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection; }
 
 /* ========================= スタッツ集計 ========================= */

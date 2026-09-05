@@ -98,6 +98,7 @@ function defaultState(){
     homePlayers, awayPlayers,
     homeRotation:[homeIds[3],homeIds[4],homeIds[1],homeIds[8],homeIds[0],homeIds[5]],
     awayRotation:[awayIds[3],awayIds[4],awayIds[1],awayIds[8],awayIds[0],awayIds[5]],
+    homeLiberoSelection:[null,null], awayLiberoSelection:[null,null],
     servingTeam:'home', isRallyInProgress:false, serveReceiveRecorded:false,
     selectedTeam:'home', selectedPlayerId:null, selectedPlayType:'serve',
     selectedResult:null, selectedCourse:null, selectedSubType:null, selectedCombo:null,
@@ -115,12 +116,60 @@ let state = load();
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
   }catch(e){}
   return defaultState();
 }
 
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+/* ========================= バックアップ：全データのJSON書き出し・復元 ========================= */
+
+function timestampString(){
+  const formatter = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return formatter.getFullYear()+pad(formatter.getMonth()+1)+pad(formatter.getDate())+'_'+
+    pad(formatter.getHours())+pad(formatter.getMinutes())+pad(formatter.getSeconds());
+}
+
+/// アプリの全データ（試合履歴・選手名簿・設定など）を1つのJSONファイルとして書き出す
+function exportAllDataAsJSON(){
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'vsTOP_backup_'+timestampString()+'.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('バックアップを書き出しました');
+}
+
+/// JSONファイルを選んで全データを復元する（ファイル選択ダイアログはinput要素なのでpromptの問題を受けない）
+function triggerImportJSON(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.onchange = function(e){
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const imported = JSON.parse(ev.target.result);
+        state = Object.assign(defaultState(), imported);
+        window.state = state;
+        save();
+        state.activeSheet = null;
+        render();
+        showToast('データを復元しました');
+      }catch(err){
+        showToast('JSONファイルの読み込みに失敗しました');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
 
 function render(){ save(); document.getElementById('app').innerHTML = renderScreen(); }
 

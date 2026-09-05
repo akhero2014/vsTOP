@@ -184,3 +184,4 @@ async function exportDetailedCSVToFolder(matchIds, team){
     exportDetailedCSV(matchIds, team);
   }
 }
+

@@ -74,6 +74,21 @@ function confirmAddTournament(){
   render();
 }
 
+/* ---- 大会名の修正（追加直後にその場で直せるように） ---- */
+function startRenameTournament(){ state.editingTournament = true; state.tournamentNameDraft = state.tournamentName; render(); }
+function cancelRenameTournament(){ state.editingTournament = false; render(); }
+function confirmRenameTournament(){
+  const oldName = state.tournamentName;
+  const newName = (state.tournamentNameDraft||'').trim();
+  if (!newName){ showToast('大会名を入力してください'); return; }
+  if (newName!==oldName){
+    state.knownTournamentNames = state.knownTournamentNames.map(n=>n===oldName?newName:n);
+    state.tournamentName = newName;
+  }
+  state.editingTournament = false;
+  render();
+}
+
 /* ---- シートの開閉 ---- */
 function openSheet(name){ state.activeSheet = name; render(); }
 function closeSheet(){ state.activeSheet = null; render(); }

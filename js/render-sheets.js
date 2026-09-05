@@ -118,6 +118,11 @@ function renderMenuSheet(){
 
     <h3>オプション機能</h3>
     ${toggleRow('相手チームのスタッツを記録する','trackOpponentStats')}
+
+    <h3 style="margin-top:18px;">データのバックアップ</h3>
+    <button class="btn" style="width:100%;margin-bottom:8px;" onclick="exportAllDataAsJSON()">⬇️ 全データをJSONで書き出す</button>
+    <button class="btn" style="width:100%;" onclick="triggerImportJSON()">⬆️ JSONファイルから復元する</button>
+    <p class="muted" style="margin-top:6px;">復元すると、現在のデータは書き出したファイルの内容で上書きされます。</p>
   `;
   return sheetShell('メニュー', body);
 }
