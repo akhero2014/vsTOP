@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>vsTOP</title>
 
 <!-- ===== PWA設定（iPadでホーム画面に追加してアプリのように使うための設定） ===== -->
@@ -25,7 +25,18 @@
     --ink:#1b2430; --card:#ffffff; --line:#e2e5ea;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box; touch-action:manipulation;}
+  html, body{height:100%;}
+  /* iPadOSは横画面固定のWeb APIが無いため、縦向きになった時に回転を促す画面を全面表示する */
+  .rotate-overlay{display:none;}
+  @media (orientation: portrait){
+    .rotate-overlay{
+      display:flex; position:fixed; inset:0; z-index:999; background:var(--navy); color:#fff;
+      flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px;
+    }
+    .rotate-overlay .ic{font-size:64px;}
+    #app{display:none;}
+  }
   body{margin:0;background:var(--gray-bg);color:var(--ink);-webkit-tap-highlight-color:transparent;}
   button{font:inherit;cursor:pointer;border:none;background:none;color:inherit;}
   input,select{font:inherit;}
@@ -62,7 +73,7 @@
   .home-btn.indigo{background:rgba(99,102,241,.1);}
 
   /* ---------- HEADER ---------- */
-  .header{background:var(--navy);color:#fff;padding:32px 16px 15px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .header{background:var(--navy);color:#fff;padding:32px 16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .header .back{opacity:.9;font-size:14px;}
   .score-block{display:flex;align-items:center;gap:10px;margin:0 auto;}
   .team-label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px;}
@@ -189,6 +200,11 @@
 </style>
 </head>
 <body>
+<div class="rotate-overlay">
+  <div class="ic">📱↻</div>
+  <div style="font-size:20px;font-weight:700;">画面を横向きにしてください</div>
+  <div style="font-size:14px;opacity:.85;">vsTOPは横画面での利用を前提としています</div>
+</div>
 <div id="app"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="js/state.js"></script>
