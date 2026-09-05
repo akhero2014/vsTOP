@@ -20,72 +20,178 @@ function simpleStatsCSV(rows, filename){
       r.block.decided,
     ].join(','));
   }
-  shareOrSaveCsvFiles([{ filename: filename+'.csv', content: lines.join('\n') }]);
+  shareOrSaveCsvFiles([{ filename: filename+'.csv', content: lines.join('\n') }], { zipName: filename });
 }
 
-function downloadText(text, filename){
-  const blob = new Blob(["\uFEFF"+text], {type:'text/csv;charset=utf-8;'});
+/* =====================================================================
+   ZIP書庫の作成（外部ライブラリ不使用の最小実装、圧縮なしのSTORE方式）。
+   選手ごとに1ファイルずつ共有・ダウンロードする方式は、iOS Safariでは
+   「複数ファイルの一括フォルダ保存」も「連続した個別ダウンロード」もどちらも
+   信頼性が低く、一部の選手のファイルだけが保存されない/ダウンロードされない
+   ことがある。1つのZIPファイルにまとめれば「保存」の操作は1回で済み、
+   ファイルが欠けることもない。
+   ===================================================================== */
+
+function crc32(bytes){
+  if (!crc32.table){
+    const table = [];
+    for (let n=0;n<256;n++){
+      let c = n;
+      for (let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      table[n] = c >>> 0;
+    }
+    crc32.table = table;
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) crc = (crc >>> 8) ^ crc32.table[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function concatUint8Arrays(arrays){
+  let total = 0;
+  arrays.forEach(a=>{ total += a.length; });
+  const out = new Uint8Array(total);
+  let off = 0;
+  arrays.forEach(a=>{ out.set(a, off); off += a.length; });
+  return out;
+}
+
+/// fileSpecs: [{filename, content(文字列, BOM付きなど込みで渡す)}] → ZIPファイルのバイト列(Uint8Array)を返す
+function buildZipBytes(fileSpecs){
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  fileSpecs.forEach(f=>{
+    const nameBytes = encoder.encode(f.filename);
+    const dataBytes = encoder.encode(f.content);
+    const crc = crc32(dataBytes);
+    const size = dataBytes.length;
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(localHeader.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x0800, true); // UTF-8ファイル名フラグ
+    lv.setUint16(8, 0, true);      // 圧縮方式=0（無圧縮）
+    lv.setUint16(10, 0, true);
+    lv.setUint16(12, 0x21, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, size, true);
+    lv.setUint32(22, size, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+
+    const localHeaderOffset = offset;
+    localParts.push(localHeader, dataBytes);
+    offset += localHeader.length + dataBytes.length;
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(centralHeader.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0x21, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, size, true);
+    cv.setUint32(24, size, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, localHeaderOffset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+  });
+
+  const centralDirStart = offset;
+  let centralDirSize = 0;
+  centralParts.forEach(p=>{ centralDirSize += p.length; });
+
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, fileSpecs.length, true);
+  ev.setUint16(10, fileSpecs.length, true);
+  ev.setUint32(12, centralDirSize, true);
+  ev.setUint32(16, centralDirStart, true);
+  ev.setUint16(20, 0, true);
+
+  return concatUint8Arrays([...localParts, ...centralParts, eocd]);
+}
+
+/* =====================================================================
+   ファイルの保存方法について。
+   iPadOS Safari は File System Access API (showDirectoryPicker /
+   showSaveFilePicker) に対応していない。そのため、iPadで最も確実に
+   「ファイルに保存」できる方法として Web Share API を最優先で使う。
+   1. Web Share API（files対応）… iPad/iPhoneのSafariで動作。1ファイルなら
+      共有シートから直接「ファイルに保存」できる。
+   2. File System Access API … Chrome/Edge等デスクトップ対応ブラウザ。
+   3. <a download> … 上記どちらも使えない場合の最終手段（1ファイルのみなら
+      Safariでも問題なく動作する）。
+   ===================================================================== */
+
+async function shareOrSaveSingleFile(filename, bytes, mimeType){
+  if (navigator.canShare){
+    try{
+      const file = new File([bytes], filename, {type: mimeType});
+      if (navigator.canShare({ files:[file] })){
+        await navigator.share({ files:[file] });
+        showToast('書き出しました。共有シートから保存先を選んでください。');
+        return;
+      }
+    }catch(err){
+      if (err && err.name==='AbortError') return;
+    }
+  }
+
+  if (window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({ suggestedName: filename });
+      const writable = await handle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      showToast('保存しました：'+filename);
+      return;
+    }catch(err){
+      if (err && err.name==='AbortError') return;
+    }
+  }
+
+  const blob = new Blob([bytes], {type: mimeType});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  showToast('ダウンロードしました：'+filename);
 }
 
-/* =====================================================================
-   CSVの保存方法について。
-   iPadOS Safari は File System Access API (showDirectoryPicker) に対応して
-   おらず、また <a download> + Blob URL の組み合わせも挙動が不安定なことが
-   知られている。そのため、iPadで最も確実に「ファイルに保存」できる方法として
-   Web Share API（navigator.share にファイルを渡し、共有シートから
-   「ファイルに保存」を選んでもらう）を最優先で使う。
-   1. Web Share API（files対応）… iPad/iPhoneのSafariで動作
-   2. File System Access API（showDirectoryPicker）… Chrome/Edge等のデスクトップ
-   3. 個別ダウンロード（<a download>）… 上記どちらも使えない場合の最終手段
-   ===================================================================== */
-
+/// fileSpecs: [{filename, content}]。複数ファイルなら1つのZIPにまとめて
+/// 保存の確実性を優先する。1ファイルだけならそのままCSVとして保存する。
 async function shareOrSaveCsvFiles(fileSpecs, options){
   options = options || {};
-  const allowFolderPicker = options.allowFolderPicker !== false;
-
   if (fileSpecs.length===0){ showToast('出力できるデータがありません'); return; }
 
-  // 1. Web Share API
-  if (navigator.canShare){
-    try{
-      const files = fileSpecs.map(f => new File(["\uFEFF"+f.content], f.filename, {type:'text/csv'}));
-      if (navigator.canShare({ files })){
-        await navigator.share({ files });
-        showToast(files.length+'件のCSVを共有しました');
-        return;
-      }
-    }catch(err){
-      if (err && err.name==='AbortError') return; // 共有をキャンセルした場合は何もしない
-      // 共有に失敗した場合は次の方法へフォールバックする
-    }
+  if (fileSpecs.length===1){
+    const bytes = new TextEncoder().encode("\uFEFF"+fileSpecs[0].content);
+    await shareOrSaveSingleFile(fileSpecs[0].filename, bytes, 'text/csv');
+    return;
   }
 
-  // 2. File System Access API（対応ブラウザのみ）
-  if (allowFolderPicker && window.showDirectoryPicker){
-    try{
-      const dirHandle = await window.showDirectoryPicker();
-      for (const f of fileSpecs){
-        const fileHandle = await dirHandle.getFileHandle(f.filename, {create:true});
-        const writable = await fileHandle.createWritable();
-        await writable.write("\uFEFF"+f.content);
-        await writable.close();
-      }
-      showToast(fileSpecs.length+'件のCSVをフォルダに保存しました。');
-      return;
-    }catch(err){
-      if (err && err.name==='AbortError') return;
-      // フォルダ保存に失敗した場合は個別ダウンロードへフォールバックする
-    }
-  }
-
-  // 3. 個別ダウンロード（最終フォールバック）
-  fileSpecs.forEach(f => downloadText(f.content, f.filename));
-  showToast(fileSpecs.length>1 ? 'お使いの環境ではまとめて保存できないため、個別ファイルとしてダウンロードしました。' : 'ダウンロードしました。');
+  const zipBytes = buildZipBytes(fileSpecs.map(f => ({ filename:f.filename, content:"\uFEFF"+f.content })));
+  const zipName = (options.zipName || 'csv_export') + '.zip';
+  await shareOrSaveSingleFile(zipName, zipBytes, 'application/zip');
 }
 
 function detailedMatchCSV(match, playerName, side){
@@ -205,17 +311,37 @@ async function exportDetailedCSVSmart(matchIds, teamName){
     const body = buildPlayerCsvForMatches(matches, name, teamName);
     return body ? { filename: name.replace(/[\/:]/g,'_')+'.csv', content: body } : null;
   }).filter(Boolean);
-  await shareOrSaveCsvFiles(fileSpecs);
+  await shareOrSaveCsvFiles(fileSpecs, { zipName: teamName.replace(/[\/:]/g,'_')+'_選手別CSV' });
 }
 
-/// 常に個別ファイルとしてダウンロードしたい場合の明示的な選択肢
+/// 常にダウンロードしたい場合の明示的な選択肢。複数ファイルの場合も1つのZIPに
+/// まとめてダウンロードする（個別に何度もダウンロードする方式はSafari等で
+/// 一部のファイルが欠けることがあるため使わない）。
 function exportDetailedCSV(matchIds, teamName){
   const matches = collectMatchesForExport(matchIds);
   if (matches.length===0){ showToast('試合を選択してください'); return; }
   const names = collectPlayerNamesForMatches(matches, teamName);
-  names.forEach(name=>{
+  const fileSpecs = names.map(name => {
     const body = buildPlayerCsvForMatches(matches, name, teamName);
-    if (body) downloadText(body, name.replace(/[\/:]/g,'_')+'.csv');
-  });
+    return body ? { filename: name.replace(/[\/:]/g,'_')+'.csv', content: body } : null;
+  }).filter(Boolean);
+  if (fileSpecs.length===0){ showToast('出力できるデータがありません'); return; }
+
+  if (fileSpecs.length===1){
+    const blob = new Blob(["\uFEFF"+fileSpecs[0].content], {type:'text/csv;charset=utf-8;'});
+    downloadBlob(blob, fileSpecs[0].filename);
+  } else {
+    const zipBytes = buildZipBytes(fileSpecs.map(f => ({ filename:f.filename, content:"\uFEFF"+f.content })));
+    downloadBlob(new Blob([zipBytes], {type:'application/zip'}), teamName.replace(/[\/:]/g,'_')+'_選手別CSV.zip');
+  }
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('ダウンロードしました：'+filename);
 }
 

@@ -201,7 +201,7 @@ function recordsTeamSwitcherHtml(){
   return `
   <div class="row gap8" style="margin-bottom:12px;align-items:center;">
     <span class="muted">チーム：</span>
-    <select class="field" style="max-width:260px;" onchange="state.recordsTeamName=this.value; state.selectedMatchForDetail=null; render();">
+    <select class="field" style="max-width:260px;" onchange="state.recordsTeamName=this.value; state.selectedMatchForDetail=null; state.csvSelectedMatchIds=[]; render();">
       ${names.map(n=>`<option value="${esc(n)}" ${n===state.recordsTeamName?'selected':''}>${esc(n)}</option>`).join('')}
     </select>
   </div>`;
@@ -370,28 +370,37 @@ function renderNameMergeList(teamName){
 
 function renderCsvTab(teamName){
   const matches = matchesInvolvingTeamName(teamName);
+  if (!state.csvSelectedMatchIds) state.csvSelectedMatchIds = [];
   let html = `<p class="muted">「${esc(teamName)}」が関わった試合のみ表示しています。出力する試合を選んでください（複数選択可）。選手ごとに1つのCSVファイルが作成されます。</p>`;
   html += matches.map(m=>{
     const label = m.id==='current'
       ? '進行中：'+m.homeTeamName+' vs '+m.awayTeamName
       : new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName;
+    const checked = state.csvSelectedMatchIds.includes(m.id);
     return `
     <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
-      <input type="checkbox" value="${m.id}" class="csv-match-check"> ${esc(label)}
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleCsvMatchSelection('${m.id}')"> ${esc(label)}
     </label>`;
   }).join('') || '<p class="muted">まだ試合記録がありません</p>';
   html += `<button class="btn primary" style="width:100%;margin-top:14px;" onclick="runCsvExport('${teamName.replace(/'/g,"\\'")}')">📤 選手ごとのCSVを書き出す</button>`;
-  html += `<p class="muted" style="margin-top:8px;">iPad/iPhoneでは共有シートが開くので「ファイルに保存」からフォルダを選んで保存できます。対応していない環境では自動的にフォルダ選択、または個別ダウンロードに切り替わります。</p>`;
-  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExportDownloadOnly('${teamName.replace(/'/g,"\\'")}')">個別にダウンロードする（常にこの方法を使う）</button>`;
+  html += `<p class="muted" style="margin-top:8px;">選手が複数いる場合は1つのZIPファイルにまとめて書き出します（保存の確実性を優先しています。ファイルを開くには展開/解凍してください）。iPad/iPhoneでは共有シートから「ファイルに保存」を選べます。</p>`;
+  html += `<button class="btn" style="width:100%;margin-top:8px;" onclick="runCsvExportDownloadOnly('${teamName.replace(/'/g,"\\'")}')">常にダウンロードする（共有シートを使わない）</button>`;
   return html;
 }
+function toggleCsvMatchSelection(id){
+  if (!state.csvSelectedMatchIds) state.csvSelectedMatchIds = [];
+  const idx = state.csvSelectedMatchIds.indexOf(id);
+  if (idx>=0) state.csvSelectedMatchIds.splice(idx,1);
+  else state.csvSelectedMatchIds.push(id);
+  render();
+}
 function runCsvExport(teamName){
-  const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
+  const ids = state.csvSelectedMatchIds || [];
   if (ids.length===0){ showToast('試合を選択してください'); return; }
   exportDetailedCSVSmart(ids, teamName);
 }
 function runCsvExportDownloadOnly(teamName){
-  const ids = Array.from(document.querySelectorAll('.csv-match-check:checked')).map(el=>el.value);
+  const ids = state.csvSelectedMatchIds || [];
   if (ids.length===0){ showToast('試合を選択してください'); return; }
   exportDetailedCSV(ids, teamName);
 }
