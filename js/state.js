@@ -93,7 +93,7 @@ function defaultState(){
     teamRosters:{ '広島東':homePlayers, '海風高校':awayPlayers },
     lastLineupByTeamName:{},
     matchFormat:'official', trackOpponentStats:false,
-    showCourseSelector:false, showReceiveTab:true, autoRotationEnabled:true, doubleTapToRecordEnabled:true,
+    showCourseSelector:false, showReceiveTab:false, autoRotationEnabled:true, doubleTapToRecordEnabled:true,
     attackComboOptions:['クイック','時間差','レフト','ライト','パイプ'],
     serveTypeOptions:['ジャンプ','フローター','サイド','アンダー'],
     homePlayers, awayPlayers,

@@ -211,9 +211,11 @@ function undoLastSilent(){
   return true;
 }
 function undoLast(){ undoLastSilent(); render(); }
-/// ラリー履歴から「ここまで取り消す」を選んだ時に使う。直近からn件まとめて取り消す
-function undoRallyEntries(n){
+/// ラリー履歴から「この時点に戻る」を選んだ時に使う。指定件数を取り消したうえで、
+/// そのままプレー入力タブに遷移して記録を再開できるようにする
+function returnToRallyPoint(n){
   for (let i=0;i<n;i++){ if (!undoLastSilent()) break; }
+  state.matchTab = 'entry';
   render();
 }
 

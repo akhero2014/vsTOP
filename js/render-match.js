@@ -111,20 +111,20 @@ function renderCourt(){
     </div>
 
     <div class="row gap8">
-      <button class="btn grow" onclick="manualRotate('home')">🔄 ${esc(state.homeTeamName)}を回転</button>
-      <button class="btn grow" ${state.trackOpponentStats?'':'disabled'} onclick="manualRotate('away')">🔄 ${esc(state.awayTeamName)}を回転</button>
+      <button class="btn grow" onclick="manualRotate('home')">🔄 ${esc(state.homeTeamName)}</button>
+      <button class="btn grow" ${state.trackOpponentStats?'':'disabled'} onclick="manualRotate('away')">🔄 ${esc(state.awayTeamName)}</button>
     </div>
     <button class="btn" onclick="openSheet('substitution')">🔁 メンバーチェンジ</button>
     <button class="btn" ${state.rallyLog.length?'':'disabled'} onclick="undoLast()">↩️ 1つ戻る</button>
 
     ${!state.trackOpponentStats ? `
       <div class="opp-mistake-row">
-        <span class="grow">相手のミスによる得点：${state.opponentMistakePoints} 回</span>
+        <span class="grow">相手のミス：${state.opponentMistakePoints} 回</span>
         <button onclick="adjustOpponentMistakePoints(-1)">➖</button>
         <button onclick="adjustOpponentMistakePoints(1)">➕</button>
       </div>` : ''}
     <div class="opp-mistake-row own" style="background:rgba(239,68,68,.12);">
-      <span class="grow">自チームのミスによる失点：${state.ownMistakePoints} 回</span>
+      <span class="grow">自チームのミス：${state.ownMistakePoints} 回</span>
       <button onclick="adjustOwnMistakePoints(-1)">➖</button>
       <button onclick="adjustOwnMistakePoints(1)">➕</button>
     </div>
@@ -276,13 +276,12 @@ function renderHistory(){
       <span class="grow"></span>
       <span class="history-badge" style="background:${resultColorFor(e)}22;color:${resultColorFor(e)}">${esc(e.resultLabel)}</span>
       <button class="btn small" onclick="startEditRallyEntry(${idx})">編集</button>
-      ${idx>0 ? confirmButtonHtml('returnToEntry-'+e.id, 'この時点に戻る', 'undoRallyEntries('+idx+');', 'small') : ''}
-      ${confirmButtonHtml('undoEntry-'+e.id, idx===0?'取消':'これ以降取消('+(idx+1)+'件)', 'undoRallyEntries('+(idx+1)+');', 'danger small')}
+      ${idx>0 ? confirmButtonHtml('returnToEntry-'+e.id, 'この時点に戻る', 'returnToRallyPoint('+idx+');', 'small') : ''}
     </div>`).join('');
   return `
   <div class="card scroll">
     <h3 style="margin-bottom:8px;">ラリー履歴</h3>
-    <p class="muted" style="font-size:11px;margin-bottom:6px;">「編集」でそのプレーの内容を修正、「この時点に戻る」でそのプレーを残したままそれより後だけ取り消し、「取消」でそのプレーごと後を取り消せます。</p>
+    <p class="muted" style="font-size:11px;margin-bottom:6px;">「編集」でそのプレーの内容を修正、「この時点に戻る」でそのプレーを残したままそれより後だけ取り消せます。</p>
     ${rows || '<p class="muted">まだ記録がありません</p>'}
   </div>`;
 }
