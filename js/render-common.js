@@ -13,6 +13,7 @@ function renderScreen(){
   if (state.screen==='home') html = renderHome();
   else if (state.screen==='match') html = renderMatch();
   html += renderActiveSheet();
+  if (state.viewingPlayerDetail) html += renderPlayerDetailOverlay();
   if (state.toastMessage) html += `<div class="toast">${esc(state.toastMessage)}</div>`;
   return html;
 }

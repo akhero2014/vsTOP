@@ -106,7 +106,7 @@ function defaultState(){
     selectedOpponentServeType:null, selectedOpponentAttackType:null,
     currentSet:1, setScores:[{home:0,away:0}], rallyLog:[],
     homeSetsWon:0, awaySetsWon:0, pendingSetResult:null,
-    opponentMistakePoints:0, matchHistory:[], playerNameAliases:{},
+    opponentMistakePoints:0, ownMistakePoints:0, lastManualOpponentServeType:null, matchHistory:[], playerNameAliases:{},
     showingStartingLineup:true, matchTab:'entry', activeSheet:null, csvSelectedMatchIds:[],
     lastDblTap:{id:null,t:0},
   };

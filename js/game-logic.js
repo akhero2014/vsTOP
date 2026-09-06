@@ -21,7 +21,17 @@ function autoSelectServer(){
   const players = currentPlayers(state.servingTeam);
   const serverId = rotation[0];
   const server = players.find(p=>p.id===serverId);
-  if (server){ state.selectedTeam = state.servingTeam; state.selectedPlayerId = server.id; }
+  if (server){
+    state.selectedTeam = state.servingTeam;
+    state.selectedPlayerId = server.id;
+    // そのプレイヤーが前回打ったサーブの種類をデフォルトで選んでおく
+    const lastType = lastServeTypeForPlayer(server.id);
+    if (lastType) state.selectedSubType = lastType;
+  }
+}
+function lastServeTypeForPlayer(playerId){
+  const e = state.rallyLog.find(e=>e.playType==='serve' && e.playerId===playerId && e.subType);
+  return e ? e.subType : null;
 }
 
 function autoSelectSetter(){
@@ -55,7 +65,13 @@ function selectPlayType(type){
   state.selectedResult = null; state.selectedCourse = null; state.selectedSubType = null; state.selectedCombo = null;
   state.selectedOpponentServeType = null; state.selectedOpponentAttackType = null;
   if (type==='serve') autoSelectServer();
-  if (type==='serveReceive' && state.trackOpponentStats) state.selectedOpponentServeType = lastOpponentServeType();
+  if (type==='serveReceive'){
+    // 相手のサーブ種類は「継続」で選ばれるようにする：個別に記録している場合は
+    // 直近の相手サーブ記録から、していない場合は前回手動で選んだ種類から引き継ぐ
+    state.selectedOpponentServeType = state.trackOpponentStats
+      ? lastOpponentServeType()
+      : (state.lastManualOpponentServeType || null);
+  }
   if (type==='receive' && state.trackOpponentStats) state.selectedOpponentAttackType = lastOpponentAttackType();
   if (type==='toss') autoSelectSetter();
 }
@@ -164,7 +180,7 @@ function recordPlay(){
   }
 
   if (pointWinner) selectPlayType(pointWinner==='home' ? 'serve' : 'serveReceive');
-  else if (wasServe) selectPlayType('serveReceive');
+  else if (wasServe || wasServeReceive) selectPlayType('toss');
   else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
 
   render();
@@ -183,15 +199,21 @@ function handleResultTap(label){
   render();
 }
 
-function undoLast(){
+function undoLastSilent(){
   const last = state.rallyLog.shift();
-  if (!last) { render(); return; }
+  if (!last) return false;
   state.setScores[state.setScores.length-1] = last.snapshot.setScore;
   state.homeRotation = last.snapshot.homeRotation;
   state.awayRotation = last.snapshot.awayRotation;
   state.servingTeam = last.snapshot.servingTeam;
   state.isRallyInProgress = last.snapshot.isRallyInProgress;
   state.serveReceiveRecorded = last.snapshot.serveReceiveRecorded;
+  return true;
+}
+function undoLast(){ undoLastSilent(); render(); }
+/// ラリー履歴から「ここまで取り消す」を選んだ時に使う。直近からn件まとめて取り消す
+function undoRallyEntries(n){
+  for (let i=0;i<n;i++){ if (!undoLastSilent()) break; }
   render();
 }
 
@@ -199,10 +221,28 @@ function adjustOpponentMistakePoints(delta){
   if (state.pendingSetResult) { render(); return; }
   if (delta>0){
     for (let i=0;i<delta;i++){ state.opponentMistakePoints++; addPoint('home'); handleScoring('home'); }
+    // 通常の得点と同じ挙動にする：ラリー進行中フラグ等をリセットしてから遷移する
+    state.isRallyInProgress = false;
+    state.serveReceiveRecorded = false;
     selectPlayType('serve');
   } else {
     const reduce = Math.min(-delta, state.opponentMistakePoints);
     if (reduce>0){ state.opponentMistakePoints -= reduce; adjustScoreSilent('home', -reduce); }
+  }
+  render();
+}
+
+/// 自チームのミスによる失点（原因を選手に紐付けずに記録したい場合の簡易カウンター）
+function adjustOwnMistakePoints(delta){
+  if (state.pendingSetResult) { render(); return; }
+  if (delta>0){
+    for (let i=0;i<delta;i++){ state.ownMistakePoints++; addPoint('away'); handleScoring('away'); }
+    state.isRallyInProgress = false;
+    state.serveReceiveRecorded = false;
+    selectPlayType(state.servingTeam==='home' ? 'serve' : 'serveReceive');
+  } else {
+    const reduce = Math.min(-delta, state.ownMistakePoints);
+    if (reduce>0){ state.ownMistakePoints -= reduce; adjustScoreSilent('away', -reduce); }
   }
   render();
 }
@@ -230,12 +270,13 @@ function archiveCurrentMatchIfNeeded(){
     setScores:JSON.parse(JSON.stringify(state.setScores)), rallyLog:JSON.parse(JSON.stringify(state.rallyLog)),
     matchFormat:state.matchFormat,
     homeOpponentErrors: state.trackOpponentStats ? opponentErrorsBenefiting('home') : state.opponentMistakePoints,
+    homeOwnErrors: state.ownMistakePoints,
   });
 }
 
 function resetMatchState(){
   state.currentSet=1; state.setScores=[{home:0,away:0}]; state.rallyLog=[];
-  state.opponentMistakePoints=0; state.homeSetsWon=0; state.awaySetsWon=0; state.pendingSetResult=null;
+  state.opponentMistakePoints=0; state.ownMistakePoints=0; state.homeSetsWon=0; state.awaySetsWon=0; state.pendingSetResult=null;
   state.isRallyInProgress=false; state.serveReceiveRecorded=false; selectPlayType('serve');
 
   // スタメン・リベロ・注意ポップの状態をいったん白紙に戻し、

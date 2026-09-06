@@ -105,8 +105,10 @@
   .court-grid{display:flex;flex-direction:column;gap:10px;flex:1;}
   .court-row{display:flex;gap:10px;justify-content:space-between;}
   .pos-circle{width:46px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:2px;}
-  .pos-circle .circ{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-weight:700;font-size:15px;background:#3b82f6;border:3px solid transparent;}
+  .pos-circle .circ{width:44px;height:44px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-weight:700;font-size:15px;background:#3b82f6;border:3px solid transparent;line-height:1.05;}
+  .circ-num{font-size:13px;font-weight:800;}
+  .circ-name{font-size:8px;font-weight:600;opacity:.9;}
   .pos-circle.away .circ{background:#8b93a1;}
   .pos-circle.setter .circ{background:#0b1f66;}
   .pos-circle.away.setter .circ{background:#454b56;}
@@ -122,6 +124,7 @@
   .pill-btn.active{background:rgba(250,204,21,.35);}
   .opp-mistake-row{display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border-radius:10px;padding:10px;}
   .opp-mistake-row button{width:44px;height:44px;font-size:26px;color:var(--orange);}
+  .opp-mistake-row.own button{color:var(--red);}
 
   /* ---------- PLAY ENTRY ---------- */
   .play-tabs{display:flex;gap:8px;flex-wrap:wrap;}

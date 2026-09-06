@@ -144,13 +144,14 @@ function renderMenuSheet(){
 /* ==================== 今の試合のスタッツ（チーム＋選手） ==================== */
 
 function statsRowsHtml(rows){
+  window.__statsRowsCache = rows;
   return `
   <div class="stats-scroll">
     <table class="stats-table">
       <thead><tr><th>#</th><th class="name-cell">選手名</th><th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th>
         <th>サーブ本数</th><th>サーブ効果率</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>ブロック本数</th></tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr>
+        ${rows.map((r,i)=>`<tr style="cursor:pointer;" onclick="openPlayerDetail(window.__statsRowsCache[${i}])">
           <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td><td>${r.setsParticipated}</td>
           <td>${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td>
           <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td>
@@ -159,6 +160,109 @@ function statsRowsHtml(rows){
         </tr>`).join('')}
       </tbody>
     </table>
+  </div>`;
+}
+
+/* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
+
+function openPlayerDetail(statsObj){ state.viewingPlayerDetail = statsObj; render(); }
+function closePlayerDetail(){ state.viewingPlayerDetail = null; render(); }
+
+function statLine(label, value){
+  return `<div class="row" style="justify-content:space-between;"><span class="muted" style="font-size:12px;">${esc(label)}</span><strong style="font-size:14px;">${esc(value)}</strong></div>`;
+}
+function statCard(innerHtml){
+  return `<div class="card" style="margin-bottom:8px;">${innerHtml}</div>`;
+}
+function sectionHeadingHtml(text){
+  return `<h3 style="margin:14px 0 6px;">${esc(text)}</h3>`;
+}
+function spikeRowHtml(row){
+  return statCard(`
+    <div style="font-weight:700;margin-bottom:4px;">${esc(row.name)}</div>
+    ${statLine('総数', row.total)}
+    ${statLine('決定本数', row.decided)}
+    ${statLine('ミス数', row.miss)}
+    ${statLine('決定率', pct(row.decisionRate))}
+  `);
+}
+function receiveRowHtml(row){
+  return statCard(`
+    <div style="font-weight:700;margin-bottom:4px;">${esc(row.name)}</div>
+    ${statLine('総数', row.total)}
+    ${statLine('Aパス', row.aPass)}
+    ${statLine('Bパス', row.bPass)}
+    ${statLine('Cパス', row.cPass)}
+    ${statLine('Aパス率', pct(row.aPassRate))}
+  `);
+}
+
+function renderPlayerDetailOverlay(){
+  const s = state.viewingPlayerDetail;
+  if (!s) return '';
+  let body = `<p class="muted">出場セット数：${s.setsParticipated}</p>`;
+
+  if (s.spikeOverall.total>0){
+    body += sectionHeadingHtml('スパイク');
+    body += spikeRowHtml(s.spikeOverall);
+    if (s.spikeByCombo.length){
+      body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">コンビ別</div>`;
+      s.spikeByCombo.forEach(c=>{ body += spikeRowHtml(c); });
+    }
+  }
+  if (s.serve.total>0){
+    body += sectionHeadingHtml('サーブ');
+    body += statCard(`
+      ${statLine('総数', s.serve.total)}
+      ${statLine('決定本数', s.serve.decided)}
+      ${statLine('効果本数', s.serve.effective)}
+      ${statLine('ミス数', s.serve.miss)}
+      ${statLine('効果率', pct(s.serve.effectiveRate))}
+    `);
+  }
+  if (s.toss.total>0){
+    body += sectionHeadingHtml('トス');
+    body += statCard(`
+      ${statLine('トス本数', s.toss.total)}
+      ${statLine('成功数', s.toss.success)}
+      ${statLine('失敗数', s.toss.failure)}
+      ${statLine('ミス数', s.toss.miss)}
+      ${statLine('成功率', pct(s.toss.successRate))}
+    `);
+  }
+  if (s.serveReceiveOverall.total>0){
+    body += sectionHeadingHtml('キャッチ');
+    body += receiveRowHtml(s.serveReceiveOverall);
+    if (s.serveReceiveByType.length){
+      body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">相手サーブ種類別</div>`;
+      s.serveReceiveByType.forEach(t=>{ body += receiveRowHtml(t); });
+    }
+  }
+  if (s.receiveOverall.total>0){
+    body += sectionHeadingHtml('レシーブ');
+    body += receiveRowHtml(s.receiveOverall);
+    if (s.receiveByType.length){
+      body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">相手攻撃種類別</div>`;
+      s.receiveByType.forEach(t=>{ body += receiveRowHtml(t); });
+    }
+  }
+  if (s.block.decided>0 || s.block.setsPlayed>0){
+    body += sectionHeadingHtml('ブロック');
+    body += statCard(`
+      ${statLine('決定本数', s.block.decided)}
+      ${statLine('セットあたりのブロック数', num(s.block.perSet,2))}
+    `);
+  }
+  if (s.spikeOverall.total===0 && s.serve.total===0 && s.toss.total===0 && s.serveReceiveOverall.total===0 && s.receiveOverall.total===0 && s.block.decided===0){
+    body += '<p class="muted">まだ記録がありません</p>';
+  }
+
+  return `
+  <div class="overlay" style="z-index:200;" onclick="if(event.target===this) closePlayerDetail();">
+    <div class="sheet" style="max-width:520px;">
+      <div class="sheet-header"><h2>${esc(s.player.name)}</h2><button class="sheet-close" onclick="closePlayerDetail()">閉じる</button></div>
+      <div class="sheet-body">${body}</div>
+    </div>
   </div>`;
 }
 function teamAggregateRowsHtml(agg, opponentErrors){
