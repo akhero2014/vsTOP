@@ -26,7 +26,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   }
   *{box-sizing:border-box; touch-action:manipulation;}
-  html, body{height:100%;}
+  html, body{height:100%;overscroll-behavior:none;}
   /* iPadOSは横画面固定のWeb APIが無いため、縦向きになった時に回転を促す画面を全面表示する */
   .rotate-overlay{display:none;}
   @media (orientation: portrait){
@@ -54,7 +54,7 @@
   h1,h2,h3,p{margin:0;}
   .screen{min-height:100vh;display:flex;flex-direction:column;}
   .match-screen{display:flex;flex-direction:column;min-height:100vh;}
-  .scroll{overflow-y:auto;}
+  .scroll{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#c7cbd3;border-radius:4px;}
 
@@ -161,7 +161,7 @@
   .sheet{background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;}
   .sheet-header{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);}
   .sheet-header h2{font-size:16px;}
-  .sheet-body{padding:16px;overflow-y:auto;}
+  .sheet-body{padding:16px;overflow-y:auto;overscroll-behavior:contain;}
   .sheet-close{margin-left:auto;color:var(--blue);font-weight:600;}
   .field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;}
   .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);}
