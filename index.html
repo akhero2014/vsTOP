@@ -53,7 +53,8 @@
   .grow{flex:1;}
   h1,h2,h3,p{margin:0;}
   .screen{min-height:100vh;display:flex;flex-direction:column;}
-  .scroll{overflow-y:auto;}
+  .match-screen{height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+  .scroll{overflow-y:auto;flex:1;min-height:0;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#c7cbd3;border-radius:4px;}
 
@@ -89,9 +90,9 @@
   .header-icons .ic{font-size:18px;}
 
   /* ---------- MATCH LAYOUT ---------- */
-  .match-body{display:flex;gap:14px;padding:14px;flex:1;flex-wrap:wrap;}
-  .col-court{width:300px;flex-shrink:0;}
-  .col-main{flex:1;min-width:320px;display:flex;flex-direction:column;gap:10px;}
+  .match-body{display:flex;gap:14px;padding:14px;flex:1;flex-wrap:wrap;min-height:0;overflow:hidden;}
+  .col-court{width:300px;flex-shrink:0;overflow-y:auto;}
+  .col-main{flex:1;min-width:320px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;}
   .tabbar{display:flex;background:var(--gray-bg);border-radius:10px;padding:3px;}
   .tabbar button{flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:600;color:#6b7280;}
   .tabbar button.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}

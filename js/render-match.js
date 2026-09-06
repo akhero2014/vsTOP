@@ -232,7 +232,7 @@ function renderPlayEntry(){
   const can = canRecord();
 
   return `
-  <div class="card col gap16 scroll">
+  <div class="card col gap16" style="flex:1;min-height:0;overflow:hidden;">
     ${renderRecentPlaysStrip()}
     <div class="play-tabs">
       ${visible.map(t=>`
@@ -267,17 +267,28 @@ function renderPlayEntry(){
 
 /* ========================= 試合中：ラリー履歴 ========================= */
 
+/// そのプレーの直後の得点を求める（idx=0＝直近のプレーなら現在のスコア、
+/// それより前のプレーなら1つ新しいプレーのsnapshotが「そのプレー直後の得点」にあたる）
+function scoreAfterEntry(idx){
+  if (idx===0) return state.setScores[state.setScores.length-1];
+  return state.rallyLog[idx-1].snapshot.setScore;
+}
+
 function renderHistory(){
-  const rows = state.rallyLog.map((e,idx)=>`
+  const rows = state.rallyLog.map((e,idx)=>{
+    const score = scoreAfterEntry(idx);
+    return `
     <div class="history-row">
       <span class="team-chip" style="background:${e.team==='home'?'#3b82f6':'#9aa1ab'}"></span>
       <span style="width:22px;">${e.playerNumber}</span>
       <span style="width:64px;">${esc(PLAY_TYPES[e.playType].label)}</span>
       <span class="grow"></span>
       <span class="history-badge" style="background:${resultColorFor(e)}22;color:${resultColorFor(e)}">${esc(e.resultLabel)}</span>
+      <span class="muted" style="font-size:12px;font-weight:700;width:50px;text-align:center;">${score.home}-${score.away}</span>
       <button class="btn small" onclick="startEditRallyEntry(${idx})">編集</button>
       ${idx>0 ? confirmButtonHtml('returnToEntry-'+e.id, 'この時点に戻る', 'returnToRallyPoint('+idx+');', 'small') : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   return `
   <div class="card scroll">
     <h3 style="margin-bottom:8px;">ラリー履歴</h3>
@@ -426,7 +437,7 @@ function renderEditRallySheet(){
 
 function renderMatch(){
   if (state.showingStartingLineup) return renderLineup();
-  let html = '<div class="screen">';
+  let html = '<div class="match-screen">';
   html += renderHeader();
   html += '<div class="match-body">';
   html += '<div class="col-court">'+renderCourt()+'</div>';
