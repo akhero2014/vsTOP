@@ -232,7 +232,7 @@ function renderPlayEntry(){
   const can = canRecord();
 
   return `
-  <div class="card col gap16">
+  <div class="card col gap16 scroll">
     ${renderRecentPlaysStrip()}
     <div class="play-tabs">
       ${visible.map(t=>`

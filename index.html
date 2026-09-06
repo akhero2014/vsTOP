@@ -53,8 +53,8 @@
   .grow{flex:1;}
   h1,h2,h3,p{margin:0;}
   .screen{min-height:100vh;display:flex;flex-direction:column;}
-  .match-screen{display:flex;flex-direction:column;min-height:100vh;}
-  .scroll{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  .match-screen{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .scroll{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;flex:1;min-height:0;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#c7cbd3;border-radius:4px;}
 
@@ -91,9 +91,9 @@
   .header-icons .ic{font-size:18px;}
 
   /* ---------- MATCH LAYOUT ---------- */
-  .match-body{display:flex;gap:14px;padding:14px;flex:1;flex-wrap:wrap;}
-  .col-court{width:300px;flex-shrink:0;}
-  .col-main{flex:1;min-width:320px;display:flex;flex-direction:column;gap:10px;}
+  .match-body{display:flex;gap:14px;padding:14px;flex:1;flex-wrap:wrap;min-height:0;overflow:hidden;}
+  .col-court{width:300px;flex-shrink:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  .col-main{flex:1;min-width:320px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;}
   .tabbar{display:flex;background:var(--gray-bg);border-radius:10px;padding:3px;}
   .tabbar button{flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:600;color:#6b7280;}
   .tabbar button.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
@@ -124,8 +124,8 @@
   .serve-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap;}
   .pill-btn{padding:6px 10px;border-radius:20px;background:var(--gray-bg);font-size:12px;}
   .pill-btn.active{background:rgba(250,204,21,.35);}
-  .opp-mistake-row{display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border-radius:10px;padding:10px;}
-  .opp-mistake-row button{width:44px;height:44px;font-size:26px;color:var(--orange);}
+  .opp-mistake-row{display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border-radius:10px;padding:6px 10px;}
+  .opp-mistake-row button{width:32px;height:32px;font-size:18px;color:var(--orange);}
   .opp-mistake-row.own button{color:var(--red);}
 
   /* ---------- PLAY ENTRY ---------- */
