@@ -26,7 +26,8 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   }
   *{box-sizing:border-box; touch-action:manipulation;}
-  html, body{height:100%;}
+  html, body{height:100%;width:100%;position:fixed;overflow:hidden;overscroll-behavior:none;top:0;left:0;}
+  #app{height:100%;width:100%;overflow:hidden;}
   /* iPadOSは横画面固定のWeb APIが無いため、縦向きになった時に回転を促す画面を全面表示する */
   .rotate-overlay{display:none;}
   @media (orientation: portrait){
@@ -54,7 +55,7 @@
   h1,h2,h3,p{margin:0;}
   .screen{min-height:100vh;display:flex;flex-direction:column;}
   .match-screen{height:100vh;overflow:hidden;display:flex;flex-direction:column;}
-  .scroll{overflow-y:auto;flex:1;min-height:0;}
+  .scroll{overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#c7cbd3;border-radius:4px;}
 
@@ -222,6 +223,19 @@
 <script src="js/render-match.js"></script>
 <script src="js/render-sheets.js"></script>
 <script src="js/main.js"></script>
+<script>
+  // iOSのWebView（特にPWAのスタンドアロン表示）は、CSSのoverflow:hiddenだけでは
+  // 画面全体の「バウンス」を防げないことがあるため、JS側でも二重に防止する。
+  // .scroll要素の中でのスクロールだけは通常通り許可する。
+  document.addEventListener('touchmove', function(e){
+    let el = e.target;
+    while (el && el !== document.body){
+      if (el.classList && el.classList.contains('scroll')) return;
+      el = el.parentElement;
+    }
+    e.preventDefault();
+  }, { passive: false });
+</script>
 <script>
   // Service Workerの登録（オフラインでも起動できるようにする）。
   // file://で直接開いた場合はService Workerが使えないため、その場合は静かにスキップする。
