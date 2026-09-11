@@ -74,6 +74,23 @@ function selectPlayType(type){
   }
   if (type==='receive' && state.trackOpponentStats) state.selectedOpponentAttackType = lastOpponentAttackType();
   if (type==='toss') autoSelectSetter();
+  if (type==='attack') autoSelectFrontRowNonSetter(state.selectedTeam);
+}
+
+/// トスの後にスパイクタブを開いた時、前衛のセッター以外の選手をデフォルトで選んでおく
+function autoSelectFrontRowNonSetter(team){
+  if (team!=='home' && !state.trackOpponentStats) return;
+  const front = team==='home' ? HOME_FRONT : AWAY_FRONT;
+  const rotation = currentRotation(team);
+  const players = currentPlayers(team);
+  for (const idx of front){
+    const p = players.find(p=>p.id===rotation[idx]);
+    if (p && p.position!=='S'){
+      state.selectedTeam = team;
+      state.selectedPlayerId = p.id;
+      return;
+    }
+  }
 }
 
 function lastOpponentServeType(){
@@ -164,6 +181,7 @@ function recordPlay(){
 
   const wasServe = state.selectedPlayType==='serve';
   const wasServeReceive = state.selectedPlayType==='serveReceive';
+  const wasToss = state.selectedPlayType==='toss';
   if (wasServe) state.serveReceiveRecorded = false;
   if (wasServeReceive) state.serveReceiveRecorded = true;
 
@@ -181,6 +199,7 @@ function recordPlay(){
 
   if (pointWinner) selectPlayType(pointWinner==='home' ? 'serve' : 'serveReceive');
   else if (wasServe || wasServeReceive) selectPlayType('toss');
+  else if (wasToss) selectPlayType('attack');
   else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
 
   render();
