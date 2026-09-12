@@ -43,8 +43,9 @@ function positionCircleHtml(team, index){
   const isSelected = state.selectedTeam===team && player && state.selectedPlayerId===player.id;
   const disabled = !player || (team==='away' && !state.trackOpponentStats);
   const setterCls = player && player.position==='S' ? 'setter' : '';
+  const isServeReceiverHighlight = player && player.isServeReceiver && state.selectedPlayType==='serveReceive';
   return `
-    <button class="pos-circle ${team==='away'?'away':''} ${setterCls} ${isSelected?'selected':''} ${!player?'empty':''}"
+    <button class="pos-circle ${team==='away'?'away':''} ${setterCls} ${isSelected?'selected':''} ${!player?'empty':''} ${isServeReceiverHighlight?'serve-receiver':''}"
       ${disabled?'disabled style="opacity:.5"':''} onclick="selectCourtPlayer('${team}','${player?player.id:''}')">
       <div class="circ">
         ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
@@ -193,6 +194,34 @@ function pickSubType(v){ state.selectedSubType = state.selectedSubType===v ? nul
 
 function pickCombo(v){ state.selectedCombo = state.selectedCombo===v ? null : v; render(); }
 
+/// コンビネーションの選択欄。レフト系・クイック系・ライト系を上段、バック系を下段に配置する
+/// ーーーーーーーーーーーーーーーーーーー
+/// レフト　　クイック　　ライト
+/// 　　　　　バック
+/// ーーーーーーーーーーーーーーーーーーー
+function renderComboPicker(selected, onPickFn){
+  const options = state.attackComboOptions; // [{name, category}]
+  const cat = (c) => options.filter(o=>o.category===c);
+  const others = options.filter(o=>!['レフト','クイック','ライト','バック'].includes(o.category));
+
+  const btn = (opt) => `<button class="choice-btn" style="${selected===opt.name?'background:var(--blue);color:#fff;':''}"
+      onclick="${onPickFn}('${opt.name.replace(/'/g,"\\'")}')">${esc(opt.name)}</button>`;
+  const col = (list) => `<div class="combo-col">${list.map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>`;
+
+  return `
+  <div class="col gap8">
+    <div class="choice-title">コンビネーション</div>
+    <div class="combo-grid">
+      <div class="combo-col" style="grid-area:left;">${cat('レフト').map(btn).join('')}</div>
+      <div class="combo-col" style="grid-area:quick;">${cat('クイック').map(btn).join('')}</div>
+      <div class="combo-col" style="grid-area:right;">${cat('ライト').map(btn).join('')}</div>
+      <div class="combo-col" style="grid-area:back;flex-direction:row;flex-wrap:wrap;justify-content:center;">${cat('バック').map(btn).join('')}</div>
+    </div>
+    ${others.length ? `<div class="choice-grid">${others.map(btn).join('')}</div>` : ''}
+    ${options.length===0 ? '<div class="muted">設定から追加できます</div>' : ''}
+  </div>`;
+}
+
 function pickOppServe(v){
   state.selectedOpponentServeType = state.selectedOpponentServeType===v ? null : v;
   if (state.selectedOpponentServeType) state.lastManualOpponentServeType = state.selectedOpponentServeType;
@@ -221,11 +250,11 @@ function renderPlayEntry(){
       : choiceSectionHtml('相手の攻撃種類', ATTACK_TYPES, state.selectedOpponentAttackType, 'pickOppAttack');
   }
   if (state.selectedPlayType==='attack'){
-    extra += choiceSectionHtml('コンビネーション', state.attackComboOptions, state.selectedCombo, 'pickCombo');
+    extra += renderComboPicker(state.selectedCombo, 'pickCombo');
   }
   if (state.selectedPlayType==='serve'){
     extra += choiceSectionHtml('サーブの種類', state.serveTypeOptions, state.selectedSubType, 'pickSubType');
-  } else if (pt.subTypes){
+  } else if (pt.subTypes && state.showAttackSubType){
     extra += choiceSectionHtml('攻撃方法', pt.subTypes, state.selectedSubType, 'pickSubType');
   }
 
@@ -401,7 +430,7 @@ function renderEditRallySheet(){
     extra += choiceSectionHtml('相手の攻撃種類', ATTACK_TYPES, draft.opponentAttackType, 'pickEditOppAttack');
   }
   if (e.playType==='attack'){
-    extra += choiceSectionHtml('コンビネーション', state.attackComboOptions, draft.combo, 'pickEditCombo');
+    extra += renderComboPicker(draft.combo, 'pickEditCombo');
   }
   if (e.playType==='serve'){
     extra += choiceSectionHtml('サーブの種類', state.serveTypeOptions, draft.subType, 'pickEditSubType');

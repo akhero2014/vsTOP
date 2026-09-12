@@ -81,6 +81,15 @@ function defaultPlayers(prefix){
   return arr;
 }
 
+/// 新しくチームを登録した時に、選手1〜8を自動で登録しておく（あとで名前・ポジションを編集できる）
+function createDefaultRoster(){
+  const arr = [];
+  for (let i=1;i<=8;i++){
+    arr.push({id:uid(), number:i, name:'選手'+i, position:'OH', isServeReceiver:false});
+  }
+  return arr;
+}
+
 function defaultState(){
   const homePlayers = defaultPlayers('home');
   const awayPlayers = defaultPlayers('away');
@@ -94,8 +103,12 @@ function defaultState(){
     lastLineupByTeamName:{},
     matchFormat:'official', trackOpponentStats:false,
     showCourseSelector:false, showReceiveTab:false, autoRotationEnabled:true, doubleTapToRecordEnabled:true,
-    attackComboOptions:['クイック','時間差','レフト','ライト','パイプ'],
+    attackComboOptions:[
+      {name:'クイック', category:'クイック'}, {name:'時間差', category:'クイック'},
+      {name:'レフト', category:'レフト'}, {name:'ライト', category:'ライト'}, {name:'パイプ', category:'バック'},
+    ],
     serveTypeOptions:['ジャンプ','フローター','サイド','アンダー'],
+    showTossTab:false, showAttackSubType:false,
     homePlayers, awayPlayers,
     homeRotation:[homeIds[3],homeIds[4],homeIds[1],homeIds[8],homeIds[0],homeIds[5]],
     awayRotation:[awayIds[3],awayIds[4],awayIds[1],awayIds[8],awayIds[0],awayIds[5]],

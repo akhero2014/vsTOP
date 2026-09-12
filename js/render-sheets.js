@@ -46,17 +46,19 @@ function renderSettingsSheet(){
     <h3 style="margin-top:18px;">入力設定</h3>
     ${toggleRow('コース選択を表示','showCourseSelector')}
     ${toggleRow('レシーブのタブを表示','showReceiveTab')}
+    ${toggleRow('トスのタブを表示','showTossTab')}
+    ${toggleRow('攻撃方法（スパイク/フェイント/ロール）を表示','showAttackSubType')}
     ${toggleRow('得点時に自動でローテーション','autoRotationEnabled')}
     ${toggleRow('結果をダブルタップして記録','doubleTapToRecordEnabled')}
 
     <h3 style="margin-top:18px;">カスタム項目</h3>
     ${renderOptionListSection('serveTypeOptions', 'サーブの種類')}
-    ${renderOptionListSection('attackComboOptions', 'スパイクのコンビネーション')}
+    ${renderComboOptionListSection()}
   `;
   return sheetShell('設定', body, 'max-width:600px;');
 }
 
-/// promptを使わず、その場で開閉するインライン編集リスト（サーブの種類・コンビネーション用）
+/// promptを使わず、その場で開閉するインライン編集リスト（サーブの種類用。並び替えにも対応）
 function renderOptionListSection(field, title){
   const isOpen = state.editingOptionList===field;
   const items = state[field];
@@ -72,6 +74,8 @@ function renderOptionListSection(field, title){
     html += items.map((item,i)=>`
       <div class="list-item">
         <span class="grow-text">${esc(item)}</span>
+        <button class="btn small" onclick="moveOptionListItem('${field}',${i},-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="btn small" onclick="moveOptionListItem('${field}',${i},1)" ${i===items.length-1?'disabled':''}>▼</button>
         <button class="btn small danger" onclick="removeOptionListItem('${field}', ${i})">削除</button>
       </div>`).join('') || '<p class="muted">まだ登録されていません</p>';
     html += `
@@ -94,6 +98,70 @@ function addOptionListItem(field){
 }
 function removeOptionListItem(field, index){
   state[field].splice(index,1);
+  render();
+}
+function moveOptionListItem(field, index, direction){
+  const arr = state[field];
+  const newIndex = index+direction;
+  if (newIndex<0 || newIndex>=arr.length) return;
+  const tmp = arr[index]; arr[index]=arr[newIndex]; arr[newIndex]=tmp;
+  render();
+}
+
+/// スパイクのコンビネーション専用の編集リスト（カテゴリ：レフト/クイック/ライト/バック の指定つき）
+function renderComboOptionListSection(){
+  const isOpen = state.editingOptionList==='attackComboOptions';
+  const items = state.attackComboOptions;
+  const categories = ['レフト','クイック','ライト','バック'];
+  let html = `
+    <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+      <strong>スパイクのコンビネーション</strong>
+      <button class="btn small" onclick="state.editingOptionList=${isOpen?'null':"'attackComboOptions'"}; state.newNameDraft=''; state.newComboCategory=state.newComboCategory||'レフト'; render();">
+        ${isOpen?'閉じる':'編集'}
+      </button>
+    </div>`;
+  if (isOpen){
+    html += `<div class="card" style="margin-bottom:14px;">`;
+    html += items.map((item,i)=>`
+      <div class="list-item">
+        <span class="grow-text">${esc(item.name)}（${esc(item.category)}）</span>
+        <button class="btn small" onclick="moveComboItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="btn small" onclick="moveComboItem(${i},1)" ${i===items.length-1?'disabled':''}>▼</button>
+        <button class="btn small danger" onclick="removeComboItem(${i})">削除</button>
+      </div>`).join('') || '<p class="muted">まだ登録されていません</p>';
+    html += `
+      <div class="col gap8" style="margin-top:8px;">
+        <label class="muted">分類（表示位置：レフト/クイック/ライトは上段、バックは下段）</label>
+        <select class="field" onchange="state.newComboCategory=this.value;">
+          ${categories.map(c=>`<option value="${c}" ${((state.newComboCategory||'レフト')===c)?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <div class="inline-add">
+          <input class="field grow" placeholder="新しいコンビ名" value="${esc(state.newNameDraft||'')}"
+            oninput="state.newNameDraft=this.value" onkeydown="if(event.key==='Enter'){addComboItem();}">
+          <button class="btn primary" onclick="addComboItem()">追加</button>
+        </div>
+      </div>`;
+    html += `</div>`;
+  }
+  return html;
+}
+function addComboItem(){
+  const v = (state.newNameDraft||'').trim();
+  if (!v){ showToast('コンビ名を入力してください'); return; }
+  if (state.attackComboOptions.some(o=>o.name===v)){ showToast('すでに登録されています'); return; }
+  state.attackComboOptions.push({ name:v, category: state.newComboCategory||'レフト' });
+  state.newNameDraft='';
+  render();
+}
+function removeComboItem(index){
+  state.attackComboOptions.splice(index,1);
+  render();
+}
+function moveComboItem(index, direction){
+  const arr = state.attackComboOptions;
+  const newIndex = index+direction;
+  if (newIndex<0 || newIndex>=arr.length) return;
+  const tmp = arr[index]; arr[index]=arr[newIndex]; arr[newIndex]=tmp;
   render();
 }
 
@@ -646,16 +714,17 @@ function addRosterPlayer(teamName){
   const roster = state.teamRosters[teamName] || (state.teamRosters[teamName]=[]);
   const used = new Set(roster.map(p=>p.number));
   let n=1; while(used.has(n)) n++;
-  roster.push({id:uid(), number:n, name:'新しい選手', position:'OH'});
+  roster.push({id:uid(), number:n, name:'新しい選手', position:'OH', isServeReceiver:false});
+  syncLiveRosterIfActive(teamName);
   render();
 }
 function updateRosterPlayerName(teamName, id, value){
   const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
-  if (p){ p.name = value; save(); }
+  if (p){ p.name = value; syncLiveRosterIfActive(teamName); save(); }
 }
 function updateRosterPlayerPosition(teamName, id, value){
   const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
-  if (p){ p.position = value; render(); }
+  if (p){ p.position = value; syncLiveRosterIfActive(teamName); render(); }
 }
 /// 背番号は重複を許さない。onchange（入力し終えたタイミング）で検証し、
 /// 重複していれば変更を取り消して警告を表示する。
@@ -668,13 +737,20 @@ function updateRosterPlayerNumber(teamName, id, value){
   const duplicate = roster.some(other=>other.id!==id && other.number===newNumber);
   if (duplicate){ showToast('その背番号はすでに使われています'); render(); return; }
   p.number = newNumber;
+  syncLiveRosterIfActive(teamName);
   render();
+}
+/// サーブレシーブ担当のオン/オフを切り替える（コート図で黄緑表示するかどうかに使う）
+function toggleRosterServeReceiver(teamName, id){
+  const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
+  if (p){ p.isServeReceiver = !p.isServeReceiver; syncLiveRosterIfActive(teamName); render(); }
 }
 
 function renderRosterEditor(teamName){
   const roster = state.teamRosters[teamName] || [];
   return `
   <div class="card" style="margin:8px 0;">
+    <p class="muted" style="font-size:11px;margin-bottom:6px;">「サーブレシーブ担当」をオンにすると、コート図でその選手が黄緑色で表示されます。</p>
     ${roster.map(p=>`
       <div class="row gap8" style="margin-bottom:6px;">
         <input class="field" style="width:64px;" type="number" min="1" value="${p.number}"
@@ -684,6 +760,8 @@ function renderRosterEditor(teamName){
         <select class="field" style="width:90px;" onchange="updateRosterPlayerPosition('${teamName}','${p.id}',this.value)">
           ${POSITIONS.map(pos=>`<option value="${pos}" ${p.position===pos?'selected':''}>${pos}</option>`).join('')}
         </select>
+        <button class="btn small ${p.isServeReceiver?'primary':''}" style="${p.isServeReceiver?'background:#84cc16;border-color:#84cc16;':''}"
+          onclick="toggleRosterServeReceiver('${teamName}','${p.id}')">レシーブ担当</button>
         ${confirmButtonHtml('delPlayer-'+p.id, '削除', "deleteRosterPlayer('"+teamName+"','"+p.id+"');", 'danger small')}
       </div>`).join('') || '<p class="muted">まだ選手が登録されていません</p>'}
     <button class="btn" style="width:100%;" onclick="addRosterPlayer('${teamName}')">＋ 選手を追加</button>
@@ -691,6 +769,7 @@ function renderRosterEditor(teamName){
 }
 function deleteRosterPlayer(teamName, id){
   state.teamRosters[teamName] = (state.teamRosters[teamName]||[]).filter(p=>p.id!==id);
+  syncLiveRosterIfActive(teamName);
   render();
 }
 

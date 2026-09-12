@@ -52,6 +52,7 @@ function visiblePlayTypes(){
       if (state.servingTeam==='away') return false;
     }
     if (type==='receive' && !state.showReceiveTab) return false;
+    if (type==='toss' && !state.showTossTab) return false;
     if (type==='serveReceive'){
       if (state.servingTeam==='home') return false;
       if (state.serveReceiveRecorded) return false;
@@ -110,7 +111,7 @@ function canRecord(){
   if (state.selectedPlayType==='serve' && state.serveTypeOptions.length && !state.selectedSubType) return false;
   if (state.selectedPlayType==='attack'){
     if (state.attackComboOptions.length && !state.selectedCombo) return false;
-    if (pt.subTypes.length && !state.selectedSubType) return false;
+    if (state.showAttackSubType && pt.subTypes.length && !state.selectedSubType) return false;
   }
   if (state.selectedPlayType==='serveReceive' && !state.trackOpponentStats){
     if (state.serveTypeOptions.length && !state.selectedOpponentServeType) return false;

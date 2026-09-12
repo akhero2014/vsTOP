@@ -6,7 +6,7 @@ function registerTeamName(name){
   if (!trimmed) return;
   state.knownTeamNames = state.knownTeamNames.filter(n=>n!==trimmed);
   state.knownTeamNames.unshift(trimmed);
-  if (!state.teamRosters[trimmed]) state.teamRosters[trimmed] = [];
+  if (!state.teamRosters[trimmed]) state.teamRosters[trimmed] = createDefaultRoster();
 }
 
 function registerTournamentName(name){
@@ -32,6 +32,13 @@ function loadRosterFromProfile(team){
 function syncRosterToProfile(team){
   const name = team==='home' ? state.homeTeamName : state.awayTeamName;
   state.teamRosters[name] = team==='home' ? state.homePlayers : state.awayPlayers;
+}
+
+/// ゲーム準備画面で名簿を編集した時、それが「今使っている自チーム/相手チーム」の名前と一致するなら、
+/// 記録画面側の選手一覧（state.homePlayers/awayPlayers）にもすぐ反映されるようにする
+function syncLiveRosterIfActive(teamName){
+  if (state.homeTeamName === teamName) state.homePlayers = state.teamRosters[teamName] || [];
+  if (state.awayTeamName === teamName) state.awayPlayers = state.teamRosters[teamName] || [];
 }
 
 function addPlayer(team){
