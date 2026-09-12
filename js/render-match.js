@@ -160,7 +160,7 @@ function renderRosterTab(){
         ${(state.selectedPlayerId===p.id && state.selectedTeam===team) ? 'background:var(--blue);color:#fff;' : ''}"
         onclick="selectCourtPlayer('${team}','${p.id}')">
         <span>#${p.number} ${esc(p.name)}</span>
-        <span class="${(state.selectedPlayerId===p.id && state.selectedTeam===team)?'':'muted'}">${esc(playerPositions(p).join('/'))}</span>
+        <span class="${(state.selectedPlayerId===p.id && state.selectedTeam===team)?'':'muted'}">${esc(positionsDisplayText(p))}</span>
       </button>`).join('')}
   </div>`;
 }
@@ -278,7 +278,7 @@ function renderPlayEntry(){
     </div>
 
     <div class="selected-player-row">
-      ${player ? `<div class="num">${player.number}</div><strong>${esc(player.name)}</strong><span class="muted">${esc(playerPositions(player).join('/'))}</span>`
+      ${player ? `<div class="num">${player.number}</div><strong>${esc(player.name)}</strong><span class="muted">${esc(positionsDisplayText(player))}</span>`
                 : '<span class="muted">選手を選択してください（コート図・選手一覧から）</span>'}
       <span class="grow"></span>
     </div>

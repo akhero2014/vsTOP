@@ -328,7 +328,7 @@ function renderLineupPickerSheet(){
         ${players.map(p=>`
           <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;"
             onclick="pickLineupPlayer('${p.id}')">
-            <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(p.position)}</span>
+            <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(positionsDisplayText(p))}</span>
           </button>`).join('')}
       </div>
     </div>
@@ -345,7 +345,7 @@ function renderLineupLiberoPickerSheet(){
         ${players.map(p=>`
           <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;"
             onclick="pickLineupLiberoPlayer('${p.id}')">
-            <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(p.position)}</span>
+            <span>#${p.number} ${esc(p.name)}</span><span class="muted">${esc(positionsDisplayText(p))}</span>
           </button>`).join('')}
       </div>
     </div>

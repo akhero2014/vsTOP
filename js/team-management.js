@@ -10,13 +10,19 @@ function playerPositions(p){
   return [];
 }
 
-/// ポジションに応じた表示色。複数ポジションの場合は斜めの2色グラデーションにする
+/// ポジションに応じた表示色。複数ポジションの場合は斜め2分割でシンプルに表示する
 function positionColorStyle(p){
   const positions = playerPositions(p);
   const colors = positions.map(pos=>POSITION_COLORS[pos]).filter(Boolean);
   if (colors.length===0) return '';
   if (colors.length===1) return `background:${colors[0]};`;
   return `background:linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%);`;
+}
+
+/// 選手のポジション表示用テキスト。未設定の場合は空欄ではなく「未設定」と表示する
+function positionsDisplayText(p){
+  const positions = playerPositions(p);
+  return positions.length ? positions.join('/') : '未設定';
 }
 
 function registerTeamName(name){

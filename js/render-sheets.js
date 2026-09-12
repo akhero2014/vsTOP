@@ -808,7 +808,7 @@ function renderRosterEditor(teamName){
           <option value="" ${pos2===''?'selected':''}>（なし）</option>
           ${POSITIONS.map(pos=>`<option value="${pos}" ${pos2===pos?'selected':''}>${pos}</option>`).join('')}
         </select>
-        <button class="btn small ${p.isServeReceiver?'primary':''}" style="${p.isServeReceiver?'background:#84cc16;border-color:#84cc16;':''}"
+        <button class="btn small ${p.isServeReceiver?'primary':''}" style="${p.isServeReceiver?'background:#ec4899;border-color:#ec4899;':''}"
           onclick="toggleRosterServeReceiver('${teamName}','${p.id}')">レシーブ担当</button>
         ${confirmButtonHtml('delPlayer-'+p.id, '削除', "deleteRosterPlayer('"+teamName+"','"+p.id+"');", 'danger small')}
       </div>`;
@@ -904,7 +904,7 @@ function renderSubstitutionSheet(){
       <h3 style="margin-top:16px;">交代で入る選手</h3>
       ${bench.length ? bench.map(p=>`
         <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;" onclick="substitute('${team}',${selIndex},'${p.id}'); state.subPositionIndex=null;">
-          #${p.number} ${esc(p.name)} <span class="muted">${esc(playerPositions(p).join('/'))}</span>
+          #${p.number} ${esc(p.name)} <span class="muted">${esc(positionsDisplayText(p))}</span>
         </button>`).join('') : '<p class="muted">交代可能な選手（ベンチ）がいません</p>'}
     ` : ''}
   `;
