@@ -72,10 +72,18 @@ function selectPlayType(type){
     state.selectedOpponentServeType = state.trackOpponentStats
       ? lastOpponentServeType()
       : (state.lastManualOpponentServeType || null);
+    autoSelectServeReceiver();
   }
   if (type==='receive' && state.trackOpponentStats) state.selectedOpponentAttackType = lastOpponentAttackType();
   if (type==='toss') autoSelectSetter();
   if (type==='attack') autoSelectFrontRowNonSetter(state.selectedTeam);
+}
+
+/// キャッチ（サーブレシーブ）タブを開いた時、ゲーム準備で「レシーブ担当」に
+/// 設定している選手がいれば自動で選択しておく（自チームが受ける場面でのみ表示されるタブのため）
+function autoSelectServeReceiver(){
+  const player = currentPlayers('home').find(p=>p.isServeReceiver);
+  if (player){ state.selectedTeam = 'home'; state.selectedPlayerId = player.id; }
 }
 
 /// トスの後にスパイクタブを開いた時、前衛のセッター以外の選手をデフォルトで選んでおく
@@ -199,7 +207,7 @@ function recordPlay(){
   }
 
   if (pointWinner) selectPlayType(pointWinner==='home' ? 'serve' : 'serveReceive');
-  else if (wasServe || wasServeReceive) selectPlayType('toss');
+  else if ((wasServe || wasServeReceive) && state.showTossTab) selectPlayType('toss');
   else if (wasToss) selectPlayType('attack');
   else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
 

@@ -204,20 +204,19 @@ function renderComboPicker(selected, onPickFn){
   const cat = (c) => options.filter(o=>o.category===c);
   const others = options.filter(o=>!['レフト','クイック','ライト','バック'].includes(o.category));
 
-  const btn = (opt) => `<button class="choice-btn" style="${selected===opt.name?'background:var(--blue);color:#fff;':''}"
+  const btn = (opt, compact) => `<button class="choice-btn ${compact?'compact':''}" style="${selected===opt.name?'background:var(--blue);color:#fff;':''}"
       onclick="${onPickFn}('${opt.name.replace(/'/g,"\\'")}')">${esc(opt.name)}</button>`;
-  const col = (list) => `<div class="combo-col">${list.map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>`;
 
   return `
   <div class="col gap8">
     <div class="choice-title">コンビネーション</div>
     <div class="combo-grid">
-      <div class="combo-col" style="grid-area:left;">${cat('レフト').map(btn).join('')}</div>
-      <div class="combo-col" style="grid-area:quick;">${cat('クイック').map(btn).join('')}</div>
-      <div class="combo-col" style="grid-area:right;">${cat('ライト').map(btn).join('')}</div>
-      <div class="combo-col" style="grid-area:back;flex-direction:row;flex-wrap:wrap;justify-content:center;">${cat('バック').map(btn).join('')}</div>
+      <div class="combo-col combo-col-top">${cat('レフト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-top">${cat('クイック').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-top combo-col-last">${cat('ライト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-back">${cat('バック').map(o=>btn(o,false)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
     </div>
-    ${others.length ? `<div class="choice-grid">${others.map(btn).join('')}</div>` : ''}
+    ${others.length ? `<div class="choice-grid">${others.map(o=>btn(o,false)).join('')}</div>` : ''}
     ${options.length===0 ? '<div class="muted">設定から追加できます</div>' : ''}
   </div>`;
 }
