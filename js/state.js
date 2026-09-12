@@ -123,7 +123,7 @@ function defaultState(){
     homeSetsWon:0, awaySetsWon:0, pendingSetResult:null,
     opponentMistakePoints:0, ownMistakePoints:0, lastManualOpponentServeType:null, matchHistory:[], playerNameAliases:{},
     showingStartingLineup:true, matchTab:'entry', activeSheet:null, csvSelectedMatchIds:[],
-    editingRallyIndex:null, editDraft:null,
+    editingRallyIndex:null, editDraft:null, importProgress:null,
     lastDblTap:{id:null,t:0},
   };
 }
@@ -216,7 +216,16 @@ function triggerImportJSON(){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    state.importProgress = { loaded:0, total: file.size || 0 };
+    render();
+    reader.onprogress = function(ev){
+      if (ev.lengthComputable){
+        state.importProgress = { loaded: ev.loaded, total: ev.total };
+        render();
+      }
+    };
     reader.onload = function(ev){
+      state.importProgress = null;
       try{
         const imported = JSON.parse(ev.target.result);
         normalizeImportedState(imported);
@@ -227,8 +236,14 @@ function triggerImportJSON(){
         render();
         showToast('データを復元しました');
       }catch(err){
+        render();
         showToast('JSONファイルの読み込みに失敗しました');
       }
+    };
+    reader.onerror = function(){
+      state.importProgress = null;
+      render();
+      showToast('ファイルの読み込みに失敗しました');
     };
     reader.readAsText(file);
   };

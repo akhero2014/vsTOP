@@ -14,8 +14,28 @@ function renderScreen(){
   else if (state.screen==='match') html = renderMatch();
   html += renderActiveSheet();
   if (state.viewingPlayerDetail) html += renderPlayerDetailOverlay();
+  if (state.editingRallyIndex !== null && state.editingRallyIndex !== undefined) html += renderEditRallySheet();
+  if (state.importProgress) html += renderImportProgressOverlay();
   if (state.toastMessage) html += `<div class="toast">${esc(state.toastMessage)}</div>`;
   return html;
+}
+
+/// JSON復元の読み込み進捗（FileReaderの実際の進捗イベントに基づく、本物の%表示）
+function renderImportProgressOverlay(){
+  const { loaded, total } = state.importProgress;
+  const pct = total>0 ? Math.min(100, Math.round((loaded/total)*100)) : 0;
+  return `
+  <div class="overlay" style="z-index:300;">
+    <div class="sheet" style="max-width:340px;">
+      <div class="sheet-body" style="text-align:center;">
+        <p style="margin-bottom:10px;">データを読み込んでいます…</p>
+        <div style="background:var(--gray-bg);border-radius:8px;overflow:hidden;height:14px;">
+          <div style="background:var(--blue);height:100%;width:${pct}%;"></div>
+        </div>
+        <p class="muted" style="margin-top:8px;">${pct}%</p>
+      </div>
+    </div>
+  </div>`;
 }
 
 /// alert()の代わりに使う、画面内蔵の簡易トースト通知（ダイアログがブロックされる環境でも確実に表示される）
