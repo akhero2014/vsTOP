@@ -214,9 +214,9 @@ function renderComboPicker(selected, onPickFn){
       <div class="combo-col combo-col-top">${cat('レフト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
       <div class="combo-col combo-col-top">${cat('クイック').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
       <div class="combo-col combo-col-top combo-col-last">${cat('ライト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
-      <div class="combo-col combo-col-back">${cat('バック').map(o=>btn(o,false)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-back">${cat('バック').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
     </div>
-    ${others.length ? `<div class="choice-grid">${others.map(o=>btn(o,false)).join('')}</div>` : ''}
+    ${others.length ? `<div class="choice-grid">${others.map(o=>btn(o,true)).join('')}</div>` : ''}
     ${options.length===0 ? '<div class="muted">設定から追加できます</div>' : ''}
   </div>`;
 }
@@ -280,7 +280,7 @@ function renderPlayEntry(){
     <div class="col gap8">
       <div class="choice-title">${esc(pt.label)}の結果を選択</div>
       <div class="result-grid">
-        ${pt.results.map(r=>`
+        ${visibleResultOptions(state.selectedPlayType).map(r=>`
           <button class="result-btn" style="background:${state.selectedResult===r.label?r.color:r.color+'33'};
             color:${state.selectedResult===r.label?'#fff':r.color};"
             onclick="handleResultTap('${r.label}')">${esc(r.label)}</button>`).join('')}

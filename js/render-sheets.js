@@ -48,6 +48,8 @@ function renderSettingsSheet(){
     ${toggleRow('レシーブのタブを表示','showReceiveTab')}
     ${toggleRow('トスのタブを表示','showTossTab')}
     ${toggleRow('攻撃方法（スパイク/フェイント/ロール）を表示','showAttackSubType')}
+    ${toggleRow('スパイクの「効果あり」を選択肢に追加','showAttackEffective')}
+    ${toggleRow('ブロックの「タッチ」を選択肢に追加','showBlockTouch')}
     ${toggleRow('得点時に自動でローテーション','autoRotationEnabled')}
     ${toggleRow('結果をダブルタップして記録','doubleTapToRecordEnabled')}
 

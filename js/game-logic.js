@@ -61,6 +61,15 @@ function visiblePlayTypes(){
   });
 }
 
+/// 「効果あり」（スパイク）・「タッチ」（ブロック）は設定でオン/オフできる任意項目。
+/// オフの場合は選択肢自体を表示しない（記録済みの過去データの集計には影響しない）
+function visibleResultOptions(playType){
+  let results = PLAY_TYPES[playType].results;
+  if (playType==='attack' && !state.showAttackEffective) results = results.filter(r=>r.label!=='効果あり');
+  if (playType==='block' && !state.showBlockTouch) results = results.filter(r=>r.label!=='タッチ');
+  return results;
+}
+
 function selectPlayType(type){
   state.selectedPlayType = type;
   state.selectedResult = null; state.selectedCourse = null; state.selectedSubType = null; state.selectedCombo = null;
@@ -206,12 +215,28 @@ function recordPlay(){
     if (wasServe) state.isRallyInProgress = true;
   }
 
+  const originalPlayType = state.selectedPlayType;
+
   if (pointWinner) selectPlayType(pointWinner==='home' ? 'serve' : 'serveReceive');
-  else if ((wasServe || wasServeReceive) && state.showTossTab) selectPlayType('toss');
-  else if (wasToss) selectPlayType('attack');
+  else if (wasServe || wasServeReceive || wasToss){
+    // 得点にならなかった場合は、その時点で表示されているタブの「右側（次）」に自動遷移する。
+    // 選手の自動選択は、遷移先タブそれぞれのルール（selectPlayType内）にそのまま従う。
+    const next = nextVisiblePlayType(originalPlayType);
+    if (next) selectPlayType(next);
+    else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
+  }
   else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
 
   render();
+}
+
+/// 現在表示されているタブの並びの中で、指定したタブの「次（右側）」のタブを返す。
+/// 無ければ先頭のタブを、それも無ければnullを返す。
+function nextVisiblePlayType(currentType){
+  const visible = visiblePlayTypes();
+  const idx = visible.indexOf(currentType);
+  if (idx>=0 && idx<visible.length-1) return visible[idx+1];
+  return visible[0] || null;
 }
 
 function handleResultTap(label){

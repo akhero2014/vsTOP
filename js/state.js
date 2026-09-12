@@ -108,7 +108,7 @@ function defaultState(){
       {name:'レフト', category:'レフト'}, {name:'ライト', category:'ライト'}, {name:'パイプ', category:'バック'},
     ],
     serveTypeOptions:['ジャンプ','フローター','サイド','アンダー'],
-    showTossTab:false, showAttackSubType:false,
+    showTossTab:false, showAttackSubType:false, showAttackEffective:false, showBlockTouch:false,
     homePlayers, awayPlayers,
     homeRotation:[homeIds[3],homeIds[4],homeIds[1],homeIds[8],homeIds[0],homeIds[5]],
     awayRotation:[awayIds[3],awayIds[4],awayIds[1],awayIds[8],awayIds[0],awayIds[5]],
