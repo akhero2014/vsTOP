@@ -39,6 +39,11 @@ function renderHome(){
           <span class="col"><span class="tt">ゲーム準備</span><span class="st">チーム名・選手を登録する</span></span>
           <span class="chev">›</span>
         </button>
+        <button class="home-btn" onclick="openSheet('settings')">
+          <span class="ic">⚙️</span>
+          <span class="col"><span class="tt">設定</span><span class="st">入力設定・カスタム項目の編集</span></span>
+          <span class="chev">›</span>
+        </button>
         ${backupHomeButtonHtml()}
       </div>
     </div>

@@ -138,7 +138,18 @@ function load(){
   return defaultState();
 }
 
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function save(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(err){
+    // 容量オーバー等でlocalStorageへの保存に失敗しても、画面の更新自体は止めない。
+    // 保存に失敗し続けると次回起動時にデータが失われる可能性があるため、初回だけ知らせる。
+    if (!state.saveFailedWarned){
+      state.saveFailedWarned = true;
+      setTimeout(()=>{ showToast('データの保存に失敗しました（保存容量の上限に達した可能性があります）。「データのバックアップ」から書き出しをおすすめします。'); }, 0);
+    }
+  }
+}
 
 /* ========================= バックアップ：全データのJSON書き出し・復元 ========================= */
 
@@ -170,7 +181,33 @@ function exportAllDataAsJSON(){
   render();
 }
 
-/// JSONファイルを選んで全データを復元する（ファイル選択ダイアログはinput要素なのでpromptの問題を受けない）
+/// 以前のバージョンで書き出したバックアップにも対応できるよう、
+/// 形式が変わったフィールドをここで今の形に揃えておく（復元直後のクラッシュを防ぐ）
+function normalizeImportedState(imported){
+  // attackComboOptions: 昔は文字列の配列だった（今は {name, category} の配列）
+  if (Array.isArray(imported.attackComboOptions)){
+    imported.attackComboOptions = imported.attackComboOptions.map(item=>{
+      if (typeof item === 'string') return { name:item, category:'レフト' };
+      if (item && typeof item==='object' && item.name) return item;
+      return null;
+    }).filter(Boolean);
+  }
+  // 選手のポジション: 昔は position:文字列 だった（今は positions:配列）。playerPositions()で
+  // 読み取り自体は互換性があるが、ここでも揃えておくとより安全
+  const normalizeRoster = (list)=>{
+    if (!Array.isArray(list)) return;
+    list.forEach(p=>{
+      if (p && !Array.isArray(p.positions)){
+        p.positions = (p.position && p.position!=='-') ? [p.position] : [];
+      }
+    });
+  };
+  normalizeRoster(imported.homePlayers);
+  normalizeRoster(imported.awayPlayers);
+  if (imported.teamRosters && typeof imported.teamRosters==='object'){
+    Object.keys(imported.teamRosters).forEach(name=>normalizeRoster(imported.teamRosters[name]));
+  }
+}
 function triggerImportJSON(){
   const input = document.createElement('input');
   input.type = 'file';
@@ -182,6 +219,7 @@ function triggerImportJSON(){
     reader.onload = function(ev){
       try{
         const imported = JSON.parse(ev.target.result);
+        normalizeImportedState(imported);
         state = Object.assign(defaultState(), imported);
         window.state = state;
         save();
@@ -197,7 +235,27 @@ function triggerImportJSON(){
   input.click();
 }
 
-function render(){ save(); document.getElementById('app').innerHTML = renderScreen(); }
+function render(){
+  save();
+  try{
+    document.getElementById('app').innerHTML = renderScreen();
+  }catch(err){
+    // 画面の描画中に何らかの理由でエラーが起きても、画面が二度と更新されなくなる事態だけは避ける。
+    // （復元したデータの形式が古い/壊れている場合など）復旧用の簡易画面を出す。
+    console.error('画面の描画中にエラーが発生しました:', err);
+    try{
+      document.getElementById('app').innerHTML = `
+        <div style="padding:32px;font-family:sans-serif;">
+          <h2 style="color:#b3261e;">画面の表示中にエラーが発生しました</h2>
+          <p>保存されているデータの形式に問題がある可能性があります。</p>
+          <button style="padding:12px 20px;font-size:16px;margin-top:12px;"
+            onclick="if(confirm('保存されているデータを初期状態に戻します。元に戻せません。よろしいですか？')){localStorage.removeItem('${STORAGE_KEY}'); location.reload();}">
+            データを初期状態に戻す
+          </button>
+        </div>`;
+    }catch(err2){ /* ここで失敗したらもう打つ手がない */ }
+  }
+}
 
 // expose helpers to inline onclick handlers
 
