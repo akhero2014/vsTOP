@@ -7,7 +7,6 @@
 function renderActiveSheet(){
   switch(state.activeSheet){
     case 'settings': return renderSettingsSheet();
-    case 'menu': return renderMenuSheet();
     case 'stats': return renderStatsSheet();
     case 'records': return renderRecordsSheet();
     case 'gamePrep': return renderGamePrepSheet();
@@ -77,6 +76,22 @@ function renderSettingsSheet(){
     <h3 style="margin-top:18px;">カスタム項目</h3>
     ${renderOptionListSection('serveTypeOptions', 'サーブの種類')}
     ${renderComboOptionListSection()}
+
+    <h3 style="margin-top:18px;">試合の操作</h3>
+    <button class="btn" style="width:100%;margin-bottom:8px;" onclick="pauseAndReturnHome()">🏠 ホームに戻る（一時停止）</button>
+    <p class="muted" style="margin-bottom:16px;">記録はそのまま保持され、ホーム画面の「試合を再開する」から続きを記録できます。</p>
+    <div class="row" style="margin-bottom:8px;">${confirmButtonHtml('newGame','🔄 新規ゲームを開始','resetForNewGame();')}</div>
+    <div class="row" style="margin-bottom:18px;">${confirmButtonHtml('endGame','🏁 このゲームを終了する','endCurrentGame();')}</div>
+    <div class="muted" style="margin-bottom:6px;">セット数の手動修正</div>
+    <div class="row" style="justify-content:space-between;margin:8px 0;">
+      <span>${esc(state.homeTeamName)}</span>
+      <div class="row gap8"><button onclick="adjustSetsWon('home',-1)">➖</button><strong>${state.homeSetsWon}</strong><button onclick="adjustSetsWon('home',1)">➕</button></div>
+    </div>
+    <div class="row" style="justify-content:space-between;margin-bottom:16px;">
+      <span>${esc(state.awayTeamName)}</span>
+      <div class="row gap8"><button onclick="adjustSetsWon('away',-1)">➖</button><strong>${state.awaySetsWon}</strong><button onclick="adjustSetsWon('away',1)">➕</button></div>
+    </div>
+    ${toggleRow('相手チームのスタッツを記録する','trackOpponentStats')}
   `;
   return sheetShell('設定', body, 'max-width:600px;');
 }
@@ -217,29 +232,7 @@ function renderBackupSheet(){
 
 /* ==================== メニュー ==================== */
 
-function renderMenuSheet(){
-  const body = `
-    <button class="btn" style="width:100%;margin-bottom:8px;" onclick="pauseAndReturnHome()">🏠 ホームに戻る（一時停止）</button>
-    <p class="muted" style="margin-bottom:16px;">記録はそのまま保持され、ホーム画面の「試合を再開する」から続きを記録できます。</p>
 
-    <div class="row" style="margin-bottom:8px;">${confirmButtonHtml('newGame','🔄 新規ゲームを開始','resetForNewGame();')}</div>
-    <div class="row" style="margin-bottom:18px;">${confirmButtonHtml('endGame','🏁 このゲームを終了する','endCurrentGame();')}</div>
-
-    <h3>セット数の手動修正</h3>
-    <div class="row" style="justify-content:space-between;margin:8px 0;">
-      <span>${esc(state.homeTeamName)}</span>
-      <div class="row gap8"><button onclick="adjustSetsWon('home',-1)">➖</button><strong>${state.homeSetsWon}</strong><button onclick="adjustSetsWon('home',1)">➕</button></div>
-    </div>
-    <div class="row" style="justify-content:space-between;margin-bottom:16px;">
-      <span>${esc(state.awayTeamName)}</span>
-      <div class="row gap8"><button onclick="adjustSetsWon('away',-1)">➖</button><strong>${state.awaySetsWon}</strong><button onclick="adjustSetsWon('away',1)">➕</button></div>
-    </div>
-
-    <h3>オプション機能</h3>
-    ${toggleRow('相手チームのスタッツを記録する','trackOpponentStats')}
-  `;
-  return sheetShell('メニュー', body);
-}
 
 /* ==================== 今の試合のスタッツ（チーム＋選手） ==================== */
 
@@ -879,13 +872,15 @@ function renderSubstitutionSheet(){
   const players = currentPlayers(team);
   const bench = benchPlayers(team);
   const selIndex = state.subPositionIndex;
+  const substitutedIds = state.substitutedPlayerIds || [];
 
   const slot = (i)=>{
     const p = players.find(p=>p.id===rotation[i]);
+    const colorStyle = p ? positionColorStyle(p) : 'background:rgba(255,255,255,.25);';
     return `
       <button class="mini-slot ${p?'filled':''}" style="${selIndex===i?'outline:3px solid #facc15;':''}"
         onclick="state.subPositionIndex=${i}; render();">
-        <div class="c">${p?p.number:'-'}</div>
+        <div class="c" style="${colorStyle}">${p?p.number:'-'}</div>
         <div style="font-size:9px;">P${i+1}</div>
         <div style="font-size:10px;">${p?esc(p.name):'空き'}</div>
       </button>`;
@@ -902,10 +897,15 @@ function renderSubstitutionSheet(){
     </div>
     ${selIndex!==null && selIndex!==undefined ? `
       <h3 style="margin-top:16px;">交代で入る選手</h3>
-      ${bench.length ? bench.map(p=>`
-        <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;" onclick="substitute('${team}',${selIndex},'${p.id}'); state.subPositionIndex=null;">
-          #${p.number} ${esc(p.name)} <span class="muted">${esc(positionsDisplayText(p))}</span>
-        </button>`).join('') : '<p class="muted">交代可能な選手（ベンチ）がいません</p>'}
+      <p class="muted" style="font-size:11px;margin-bottom:6px;">オレンジ色の選手は、この試合で一度交代したことがあります。リベロ（L1/L2）に設定されている選手はここには表示されません。</p>
+      ${bench.length ? bench.map(p=>{
+        const wasSubstituted = substitutedIds.includes(p.id);
+        return `
+        <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;${wasSubstituted?'background:rgba(249,115,22,.15);border-color:#f97316;':''}"
+          onclick="substitute('${team}',${selIndex},'${p.id}'); state.subPositionIndex=null;">
+          #${p.number} ${esc(p.name)} <span class="muted">${esc(positionsDisplayText(p))}</span>${wasSubstituted?' <span style="color:#f97316;">（交代済み）</span>':''}
+        </button>`;
+      }).join('') : '<p class="muted">交代可能な選手（ベンチ）がいません</p>'}
     ` : ''}
   `;
   return sheetShell('メンバーチェンジ', body, 'max-width:500px;');

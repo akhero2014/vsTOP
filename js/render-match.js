@@ -18,7 +18,6 @@ function renderHeader(){
     <div class="header-icons">
       <button onclick="openSheet('settings')"><span class="ic">⚙️</span>設定</button>
       <button onclick="openSheet('stats')"><span class="ic">📊</span>スタッツ</button>
-      <button onclick="openSheet('menu')"><span class="ic">☰</span>メニュー</button>
     </div>
   </div>`;
 }

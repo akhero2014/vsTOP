@@ -332,6 +332,7 @@ function archiveCurrentMatchIfNeeded(){
 function resetMatchState(){
   state.currentSet=1; state.setScores=[{home:0,away:0}]; state.rallyLog=[];
   state.opponentMistakePoints=0; state.ownMistakePoints=0; state.homeSetsWon=0; state.awaySetsWon=0; state.pendingSetResult=null;
+  state.substitutedPlayerIds=[];
   state.isRallyInProgress=false; state.serveReceiveRecorded=false; selectPlayType('serve');
 
   // スタメン・リベロ・注意ポップの状態をいったん白紙に戻し、

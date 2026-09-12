@@ -93,12 +93,19 @@ function updatePlayerField(team, id, field, value){
 function benchPlayers(team){
   const list = currentPlayers(team);
   const onCourt = new Set(currentRotation(team).filter(Boolean));
-  return list.filter(p=>!onCourt.has(p.id));
+  const liberoIds = new Set((liberoSelection(team)||[]).filter(Boolean));
+  return list.filter(p=>!onCourt.has(p.id) && !liberoIds.has(p.id));
 }
 
+/// メンバーチェンジ：出た選手・入った選手の両方を「この試合で交代したことがある」として記録しておく
 function substitute(team, positionIndex, incomingId){
-  if (team==='home') state.homeRotation[positionIndex] = incomingId;
-  else state.awayRotation[positionIndex] = incomingId;
+  const rotation = team==='home' ? state.homeRotation : state.awayRotation;
+  const outgoingId = rotation[positionIndex];
+  if (!state.substitutedPlayerIds) state.substitutedPlayerIds = [];
+  [outgoingId, incomingId].forEach(id=>{
+    if (id && !state.substitutedPlayerIds.includes(id)) state.substitutedPlayerIds.push(id);
+  });
+  rotation[positionIndex] = incomingId;
   refreshServerSelectionIfNeeded();
   render();
 }
