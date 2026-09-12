@@ -33,6 +33,21 @@ function toggleRow(label, field){
   </div>`;
 }
 
+/// 設定項目をカテゴリごとにまとめ、タップで開閉できるドロップダウン形式にする
+function renderSettingsCategory(key, title, rowsHtmlArray){
+  if (!state.openSettingsCategory) state.openSettingsCategory = {};
+  const isOpen = !!state.openSettingsCategory[key];
+  return `
+  <div class="card" style="margin-bottom:10px;padding:0;overflow:hidden;">
+    <button style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;padding:12px;"
+      onclick="state.openSettingsCategory['${key}']=!state.openSettingsCategory['${key}']; render();">
+      <strong>${esc(title)}</strong>
+      <span class="muted">${isOpen?'▲':'▼'}</span>
+    </button>
+    ${isOpen ? `<div style="padding:0 12px 8px;">${rowsHtmlArray.join('')}</div>` : ''}
+  </div>`;
+}
+
 /* ==================== 設定 ==================== */
 
 function renderSettingsSheet(){
@@ -44,14 +59,20 @@ function renderSettingsSheet(){
     <input class="field" value="${esc(state.awayTeamName)}" oninput="state.awayTeamName=this.value; save();">
 
     <h3 style="margin-top:18px;">入力設定</h3>
-    ${toggleRow('コース選択を表示','showCourseSelector')}
-    ${toggleRow('レシーブのタブを表示','showReceiveTab')}
-    ${toggleRow('トスのタブを表示','showTossTab')}
-    ${toggleRow('攻撃方法（スパイク/フェイント/ロール）を表示','showAttackSubType')}
-    ${toggleRow('スパイクの「効果あり」を選択肢に追加','showAttackEffective')}
-    ${toggleRow('ブロックの「タッチ」を選択肢に追加','showBlockTouch')}
-    ${toggleRow('得点時に自動でローテーション','autoRotationEnabled')}
-    ${toggleRow('結果をダブルタップして記録','doubleTapToRecordEnabled')}
+    ${renderSettingsCategory('tabs', 'タブの表示', [
+      toggleRow('コース選択を表示','showCourseSelector'),
+      toggleRow('レシーブのタブを表示','showReceiveTab'),
+      toggleRow('トスのタブを表示','showTossTab'),
+    ])}
+    ${renderSettingsCategory('options', 'プレー結果の選択肢', [
+      toggleRow('攻撃方法（スパイク/フェイント/ロール）を表示','showAttackSubType'),
+      toggleRow('スパイクの「効果あり」を選択肢に追加','showAttackEffective'),
+      toggleRow('ブロックの「タッチ」を選択肢に追加','showBlockTouch'),
+    ])}
+    ${renderSettingsCategory('operation', '操作性', [
+      toggleRow('得点時に自動でローテーション','autoRotationEnabled'),
+      toggleRow('結果をダブルタップして記録','doubleTapToRecordEnabled'),
+    ])}
 
     <h3 style="margin-top:18px;">カスタム項目</h3>
     ${renderOptionListSection('serveTypeOptions', 'サーブの種類')}
@@ -113,7 +134,6 @@ function moveOptionListItem(field, index, direction){
 /// スパイクのコンビネーション専用の編集リスト（カテゴリ：レフト/クイック/ライト/バック の指定つき）
 function renderComboOptionListSection(){
   const isOpen = state.editingOptionList==='attackComboOptions';
-  const items = state.attackComboOptions;
   const categories = ['レフト','クイック','ライト','バック'];
   let html = `
     <div class="row" style="justify-content:space-between;margin-bottom:6px;">
@@ -124,15 +144,21 @@ function renderComboOptionListSection(){
     </div>`;
   if (isOpen){
     html += `<div class="card" style="margin-bottom:14px;">`;
-    html += items.map((item,i)=>`
-      <div class="list-item">
-        <span class="grow-text">${esc(item.name)}（${esc(item.category)}）</span>
-        <button class="btn small" onclick="moveComboItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
-        <button class="btn small" onclick="moveComboItem(${i},1)" ${i===items.length-1?'disabled':''}>▼</button>
-        <button class="btn small danger" onclick="removeComboItem(${i})">削除</button>
-      </div>`).join('') || '<p class="muted">まだ登録されていません</p>';
+    categories.forEach(category=>{
+      const itemsInCategory = state.attackComboOptions
+        .map((o,i)=>({o,i}))
+        .filter(x=>x.o.category===category);
+      html += `<div class="muted" style="font-size:12px;font-weight:700;margin:8px 0 4px;">${esc(category)}</div>`;
+      html += itemsInCategory.map((x,catIdx)=>`
+        <div class="list-item">
+          <span class="grow-text">${esc(x.o.name)}</span>
+          <button class="btn small" onclick="moveComboItemInCategory('${category}',${catIdx},-1)" ${catIdx===0?'disabled':''}>▲</button>
+          <button class="btn small" onclick="moveComboItemInCategory('${category}',${catIdx},1)" ${catIdx===itemsInCategory.length-1?'disabled':''}>▼</button>
+          <button class="btn small danger" onclick="removeComboItem(${x.i})">削除</button>
+        </div>`).join('') || '<p class="muted" style="font-size:12px;">まだありません</p>';
+    });
     html += `
-      <div class="col gap8" style="margin-top:8px;">
+      <div class="col gap8" style="margin-top:12px;">
         <label class="muted">分類（表示位置：レフト/クイック/ライトは上段、バックは下段）</label>
         <select class="field" onchange="state.newComboCategory=this.value;">
           ${categories.map(c=>`<option value="${c}" ${((state.newComboCategory||'レフト')===c)?'selected':''}>${c}</option>`).join('')}
@@ -159,11 +185,15 @@ function removeComboItem(index){
   state.attackComboOptions.splice(index,1);
   render();
 }
-function moveComboItem(index, direction){
+/// 同じジャンル（カテゴリ）内だけで順番を入れ替える
+function moveComboItemInCategory(category, categoryIndex, direction){
   const arr = state.attackComboOptions;
-  const newIndex = index+direction;
-  if (newIndex<0 || newIndex>=arr.length) return;
-  const tmp = arr[index]; arr[index]=arr[newIndex]; arr[newIndex]=tmp;
+  const indices = arr.map((o,i)=>({o,i})).filter(x=>x.o.category===category).map(x=>x.i);
+  const newCategoryIndex = categoryIndex + direction;
+  if (newCategoryIndex<0 || newCategoryIndex>=indices.length) return;
+  const idxA = indices[categoryIndex];
+  const idxB = indices[newCategoryIndex];
+  const tmp = arr[idxA]; arr[idxA]=arr[idxB]; arr[idxB]=tmp;
   render();
 }
 
@@ -724,9 +754,17 @@ function updateRosterPlayerName(teamName, id, value){
   const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
   if (p){ p.name = value; syncLiveRosterIfActive(teamName); save(); }
 }
-function updateRosterPlayerPosition(teamName, id, value){
+/// ポジションは一人につき最大2つまで選べる（slotIndex: 0か1）
+function updateRosterPlayerPosition(teamName, id, slotIndex, value){
   const p = (state.teamRosters[teamName]||[]).find(p=>p.id===id);
-  if (p){ p.position = value; syncLiveRosterIfActive(teamName); render(); }
+  if (!p) return;
+  const positions = playerPositions(p).slice(0,2);
+  while (positions.length<2) positions.push('');
+  positions[slotIndex] = value;
+  p.positions = positions.filter(Boolean);
+  delete p.position;
+  syncLiveRosterIfActive(teamName);
+  render();
 }
 /// 背番号は重複を許さない。onchange（入力し終えたタイミング）で検証し、
 /// 重複していれば変更を取り消して警告を表示する。
@@ -752,20 +790,29 @@ function renderRosterEditor(teamName){
   const roster = state.teamRosters[teamName] || [];
   return `
   <div class="card" style="margin:8px 0;">
-    <p class="muted" style="font-size:11px;margin-bottom:6px;">「サーブレシーブ担当」をオンにすると、コート図でその選手が黄緑色で表示されます。</p>
-    ${roster.map(p=>`
-      <div class="row gap8" style="margin-bottom:6px;">
+    <p class="muted" style="font-size:11px;margin-bottom:6px;">ポジションは一人につき最大2つまで選べます。「サーブレシーブ担当」をオンにすると、コート図でその選手が黄緑色で表示されます。</p>
+    ${roster.map(p=>{
+      const positions = playerPositions(p);
+      const pos1 = positions[0]||'';
+      const pos2 = positions[1]||'';
+      return `
+      <div class="row gap8" style="margin-bottom:6px;flex-wrap:wrap;">
         <input class="field" style="width:64px;" type="number" min="1" value="${p.number}"
           onchange="updateRosterPlayerNumber('${teamName}','${p.id}',this.value)">
         <input class="field grow" value="${esc(p.name)}"
           oninput="updateRosterPlayerName('${teamName}','${p.id}',this.value)">
-        <select class="field" style="width:90px;" onchange="updateRosterPlayerPosition('${teamName}','${p.id}',this.value)">
-          ${POSITIONS.map(pos=>`<option value="${pos}" ${p.position===pos?'selected':''}>${pos}</option>`).join('')}
+        <select class="field" style="width:80px;" onchange="updateRosterPlayerPosition('${teamName}','${p.id}',0,this.value)">
+          ${POSITIONS.map(pos=>`<option value="${pos}" ${pos1===pos?'selected':''}>${pos}</option>`).join('')}
+        </select>
+        <select class="field" style="width:90px;" onchange="updateRosterPlayerPosition('${teamName}','${p.id}',1,this.value)">
+          <option value="" ${pos2===''?'selected':''}>（なし）</option>
+          ${POSITIONS.map(pos=>`<option value="${pos}" ${pos2===pos?'selected':''}>${pos}</option>`).join('')}
         </select>
         <button class="btn small ${p.isServeReceiver?'primary':''}" style="${p.isServeReceiver?'background:#84cc16;border-color:#84cc16;':''}"
           onclick="toggleRosterServeReceiver('${teamName}','${p.id}')">レシーブ担当</button>
         ${confirmButtonHtml('delPlayer-'+p.id, '削除', "deleteRosterPlayer('"+teamName+"','"+p.id+"');", 'danger small')}
-      </div>`).join('') || '<p class="muted">まだ選手が登録されていません</p>'}
+      </div>`;
+    }).join('') || '<p class="muted">まだ選手が登録されていません</p>'}
     <button class="btn" style="width:100%;" onclick="addRosterPlayer('${teamName}')">＋ 選手を追加</button>
   </div>`;
 }
@@ -857,7 +904,7 @@ function renderSubstitutionSheet(){
       <h3 style="margin-top:16px;">交代で入る選手</h3>
       ${bench.length ? bench.map(p=>`
         <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;" onclick="substitute('${team}',${selIndex},'${p.id}'); state.subPositionIndex=null;">
-          #${p.number} ${esc(p.name)} <span class="muted">${esc(p.position)}</span>
+          #${p.number} ${esc(p.name)} <span class="muted">${esc(playerPositions(p).join('/'))}</span>
         </button>`).join('') : '<p class="muted">交代可能な選手（ベンチ）がいません</p>'}
     ` : ''}
   `;

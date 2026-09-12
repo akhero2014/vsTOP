@@ -37,7 +37,7 @@ function lastServeTypeForPlayer(playerId){
 function autoSelectSetter(){
   if (state.selectedTeam==='away' && !state.trackOpponentStats) return;
   const players = currentPlayers(state.selectedTeam);
-  const setter = players.find(p=>p.position==='S');
+  const setter = players.find(p=>playerPositions(p).includes('S'));
   if (setter) state.selectedPlayerId = setter.id;
 }
 
@@ -103,7 +103,7 @@ function autoSelectFrontRowNonSetter(team){
   const players = currentPlayers(team);
   for (const idx of front){
     const p = players.find(p=>p.id===rotation[idx]);
-    if (p && p.position!=='S'){
+    if (p && !playerPositions(p).includes('S')){
       state.selectedTeam = team;
       state.selectedPlayerId = p.id;
       return;

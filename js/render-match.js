@@ -42,12 +42,13 @@ function positionCircleHtml(team, index){
   const player = players.find(p=>p.id===rotation[index]);
   const isSelected = state.selectedTeam===team && player && state.selectedPlayerId===player.id;
   const disabled = !player || (team==='away' && !state.trackOpponentStats);
-  const setterCls = player && player.position==='S' ? 'setter' : '';
+  const setterCls = player && playerPositions(player).includes('S') ? 'setter' : '';
   const isServeReceiverHighlight = player && player.isServeReceiver && state.selectedPlayType==='serveReceive';
+  const circStyle = isServeReceiverHighlight ? '' : positionColorStyle(player);
   return `
     <button class="pos-circle ${team==='away'?'away':''} ${setterCls} ${isSelected?'selected':''} ${!player?'empty':''} ${isServeReceiverHighlight?'serve-receiver':''}"
       ${disabled?'disabled style="opacity:.5"':''} onclick="selectCourtPlayer('${team}','${player?player.id:''}')">
-      <div class="circ">
+      <div class="circ" style="${circStyle}">
         ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
       </div>
       <div class="lab">P${index+1}</div>
@@ -59,10 +60,11 @@ function liberoBadgeHtml(team, index, label){
   const player = l[index];
   const isSelected = state.selectedTeam===team && player && state.selectedPlayerId===player.id;
   const disabled = !player || (team==='away' && !state.trackOpponentStats);
+  const circStyle = player ? positionColorStyle(player) || 'background:#f59e0b;' : 'background:rgba(255,255,255,.25);';
   return `
     <button class="pos-circle ${team==='away'?'away':''} ${isSelected?'selected':''} ${!player?'empty':''}"
       style="width:44px" ${disabled?'disabled style="opacity:.5"':''} onclick="selectCourtPlayer('${team}','${player?player.id:''}')">
-      <div class="circ" style="width:40px;height:40px;background:${player?'#f59e0b':'rgba(255,255,255,.25)'}">
+      <div class="circ" style="width:40px;height:40px;${circStyle}">
         ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
       </div>
       <div class="lab">${label}</div>
@@ -158,7 +160,7 @@ function renderRosterTab(){
         ${(state.selectedPlayerId===p.id && state.selectedTeam===team) ? 'background:var(--blue);color:#fff;' : ''}"
         onclick="selectCourtPlayer('${team}','${p.id}')">
         <span>#${p.number} ${esc(p.name)}</span>
-        <span class="${(state.selectedPlayerId===p.id && state.selectedTeam===team)?'':'muted'}">${esc(p.position)}</span>
+        <span class="${(state.selectedPlayerId===p.id && state.selectedTeam===team)?'':'muted'}">${esc(playerPositions(p).join('/'))}</span>
       </button>`).join('')}
   </div>`;
 }
@@ -199,24 +201,30 @@ function pickCombo(v){ state.selectedCombo = state.selectedCombo===v ? null : v;
 /// レフト　　クイック　　ライト
 /// 　　　　　バック
 /// ーーーーーーーーーーーーーーーーーーー
+/// コンビネーションの選択欄。レフト系・クイック系・ライト系を上段、バック系を下段に配置する。
+/// レフト・ライトは最大2つ、クイックは最大3つが横に並ぶよう、列の幅比を2:3:2にしてある
+/// ーーーーーーーーーーーーーーーーーーー
+/// レフト　　クイック　　ライト
+/// 　　　　　バック
+/// ーーーーーーーーーーーーーーーーーーー
 function renderComboPicker(selected, onPickFn){
   const options = state.attackComboOptions; // [{name, category}]
   const cat = (c) => options.filter(o=>o.category===c);
   const others = options.filter(o=>!['レフト','クイック','ライト','バック'].includes(o.category));
 
-  const btn = (opt, compact) => `<button class="choice-btn ${compact?'compact':''}" style="${selected===opt.name?'background:var(--blue);color:#fff;':''}"
+  const btn = (opt) => `<button class="combo-btn ${selected===opt.name?'active':''}"
       onclick="${onPickFn}('${opt.name.replace(/'/g,"\\'")}')">${esc(opt.name)}</button>`;
 
   return `
   <div class="col gap8">
     <div class="choice-title">コンビネーション</div>
     <div class="combo-grid">
-      <div class="combo-col combo-col-top">${cat('レフト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
-      <div class="combo-col combo-col-top">${cat('クイック').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
-      <div class="combo-col combo-col-top combo-col-last">${cat('ライト').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
-      <div class="combo-col combo-col-back">${cat('バック').map(o=>btn(o,true)).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-top">${cat('レフト').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-top">${cat('クイック').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-top combo-col-last">${cat('ライト').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-back">${cat('バック').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
     </div>
-    ${others.length ? `<div class="choice-grid">${others.map(o=>btn(o,true)).join('')}</div>` : ''}
+    ${others.length ? `<div class="choice-grid">${others.map(o=>`<button class="choice-btn ${selected===o.name?'active':''}" onclick="${onPickFn}('${o.name.replace(/'/g,"\\'")}')">${esc(o.name)}</button>`).join('')}</div>` : ''}
     ${options.length===0 ? '<div class="muted">設定から追加できます</div>' : ''}
   </div>`;
 }
@@ -270,7 +278,7 @@ function renderPlayEntry(){
     </div>
 
     <div class="selected-player-row">
-      ${player ? `<div class="num">${player.number}</div><strong>${esc(player.name)}</strong><span class="muted">${esc(player.position)}</span>`
+      ${player ? `<div class="num">${player.number}</div><strong>${esc(player.name)}</strong><span class="muted">${esc(playerPositions(player).join('/'))}</span>`
                 : '<span class="muted">選手を選択してください（コート図・選手一覧から）</span>'}
       <span class="grow"></span>
     </div>

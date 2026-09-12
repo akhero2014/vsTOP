@@ -1,6 +1,24 @@
 /* team-management.js — チーム・選手管理：チーム名の登録、名簿の読み込み/保存、選手の追加・削除、メンバーチェンジ
    volleyball-stats アプリの一部。index.html からこの順番で読み込まれる想定です。 */
 
+/// 選手のポジション配列を返す（一人につき最大2つ）。
+/// 古いデータ（position:文字列 一つだけ）が残っていても壊れないようにする
+function playerPositions(p){
+  if (!p) return [];
+  if (Array.isArray(p.positions)) return p.positions.filter(Boolean);
+  if (p.position && p.position!=='-') return [p.position];
+  return [];
+}
+
+/// ポジションに応じた表示色。複数ポジションの場合は斜めの2色グラデーションにする
+function positionColorStyle(p){
+  const positions = playerPositions(p);
+  const colors = positions.map(pos=>POSITION_COLORS[pos]).filter(Boolean);
+  if (colors.length===0) return '';
+  if (colors.length===1) return `background:${colors[0]};`;
+  return `background:linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%);`;
+}
+
 function registerTeamName(name){
   const trimmed = (name||'').trim();
   if (!trimmed) return;
@@ -45,7 +63,7 @@ function addPlayer(team){
   const list = currentPlayers(team);
   const used = new Set(list.map(p=>p.number));
   let n=1; while(used.has(n)) n++;
-  list.push({id:uid(), number:n, name:'新しい選手', position:'OH'});
+  list.push({id:uid(), number:n, name:'新しい選手', positions:['OH']});
   syncRosterToProfile(team);
   render();
 }

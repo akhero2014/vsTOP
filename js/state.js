@@ -51,7 +51,6 @@ const PLAY_TYPES = {
     results:[
       {label:'決定', color:'#22c55e', outcome:'acting'},
       {label:'タッチ', color:'#10b981', outcome:'none'},
-      {label:'ミス', color:'#ef4444', outcome:'opponent'},
     ]},
 };
 const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block'];
@@ -68,6 +67,9 @@ const AWAY_BACK  = [0,5,4]; // P1,P6,P5
 
 function uid(){ return 'id-'+Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
+/// ポジションごとの表示色。複数ポジション保持時は2色を斜めに分割して表示する
+const POSITION_COLORS = { OH:'#3b82f6', OP:'#f97316', MB:'#10b981', S:'#0b1f66', L:'#f59e0b', R:'#a855f7' };
+
 function defaultPlayers(prefix){
   const names = prefix==='home'
     ? [['山田','OP'],['佐藤','OH'],['鈴木','MB'],['高橋','MB'],['田中','OH'],['伊藤','S'],
@@ -75,8 +77,8 @@ function defaultPlayers(prefix){
     : null;
   const arr = [];
   for (let i=0;i<12;i++){
-    if (names){ arr.push({id:uid(), number:i+1, name:names[i][0], position:names[i][1]}); }
-    else { arr.push({id:uid(), number:i+1, name:'相手選手'+(i+1), position:'-'}); }
+    if (names){ arr.push({id:uid(), number:i+1, name:names[i][0], positions:[names[i][1]]}); }
+    else { arr.push({id:uid(), number:i+1, name:'相手選手'+(i+1), positions:[]}); }
   }
   return arr;
 }
@@ -85,7 +87,7 @@ function defaultPlayers(prefix){
 function createDefaultRoster(){
   const arr = [];
   for (let i=1;i<=8;i++){
-    arr.push({id:uid(), number:i, name:'選手'+i, position:'OH', isServeReceiver:false});
+    arr.push({id:uid(), number:i, name:'選手'+i, positions:['OH'], isServeReceiver:false});
   }
   return arr;
 }
