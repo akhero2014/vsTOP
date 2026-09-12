@@ -50,7 +50,7 @@ function positionCircleHtml(team, index){
       <div class="circ" style="${circStyle}">
         ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
       </div>
-      <div class="lab">P${index+1}</div>
+      <div class="lab">S${index+1}</div>
     </button>`;
 }
 

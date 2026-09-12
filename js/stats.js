@@ -63,11 +63,22 @@ function computeDetailedStats(events, setsPlayed, player){
 
 /* ---- 今の試合：選手・チーム ---- */
 
+/// 出場形態：スタメンだった場合は開始時のポジション（S1〜S6）、途中出場の場合は「MC」（メンバーチェンジ）
+function participationLabel(startingLineup, substitutedIds, playerId){
+  const entry = (startingLineup||[]).find(e=>e.playerId===playerId);
+  if (entry) return entry.position;
+  if ((substitutedIds||[]).includes(playerId)) return 'MC';
+  return null;
+}
+
 function playerDetailedStats(playerId, team){
   const player = findPlayer(playerId, team);
   const events = state.rallyLog.filter(e=>e.team===team && e.playerId===playerId);
   const setsPlayed = new Set(events.map(e=>e.setNumber)).size;
-  return computeDetailedStats(events, setsPlayed, player);
+  const result = computeDetailedStats(events, setsPlayed, player);
+  const startingLineup = team==='home' ? state.homeStartingLineup : state.awayStartingLineup;
+  result.participationType = participationLabel(startingLineup, state.substitutedPlayerIds, playerId);
+  return result;
 }
 function playerDetailedStatsList(team){
   return currentPlayers(team).map(p=>playerDetailedStats(p.id, team)).sort((a,b)=>a.player.number-b.player.number);
@@ -104,7 +115,7 @@ function detailedStatsForAllPlayersFromMatches(perMatchEventsList){
   return Object.keys(byName).map(name=>{
     const events = byName[name];
     const last = events[events.length-1];
-    const player = { number:last.playerNumber, name, position:'-' };
+    const player = { id:last.playerId, number:last.playerNumber, name, position:'-' };
     return computeDetailedStats(events, sets[name], player);
   }).sort((a,b)=>a.player.name.localeCompare(b.player.name,'ja'));
 }
@@ -117,7 +128,9 @@ function currentAsMatchRecord(){
   if (state.rallyLog.length===0) return null;
   return { id:'current', date:new Date().toISOString(), tournamentName:state.tournamentName,
     homeTeamName:state.homeTeamName, awayTeamName:state.awayTeamName, setScores:state.setScores,
-    rallyLog:state.rallyLog, matchFormat:state.matchFormat };
+    rallyLog:state.rallyLog, matchFormat:state.matchFormat,
+    homeStartingLineup: state.homeStartingLineup||[], awayStartingLineup: state.awayStartingLineup||[],
+    substitutedPlayerIds: state.substitutedPlayerIds||[] };
 }
 
 /// 指定したチーム名が関わった試合だけを返す（進行中の試合＋過去の試合）
@@ -215,7 +228,12 @@ function aggregateFromPlayerList(list){
 
 function matchHomeEvents(match, team){ return match.rallyLog.filter(e=>e.team===team); }
 function matchDetailedStatsForAllPlayers(match, team){
-  return detailedStatsForAllPlayersFromMatches([matchHomeEvents(match, team)]);
+  const results = detailedStatsForAllPlayersFromMatches([matchHomeEvents(match, team)]);
+  const startingLineup = team==='home' ? match.homeStartingLineup : match.awayStartingLineup;
+  results.forEach(r=>{
+    r.participationType = participationLabel(startingLineup, match.substitutedPlayerIds, r.player.id);
+  });
+  return results;
 }
 function matchOpponentErrors(match, team){
   const opp = team==='home' ? 'away' : 'home';

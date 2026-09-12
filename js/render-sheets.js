@@ -238,14 +238,17 @@ function renderBackupSheet(){
 
 function statsRowsHtml(rows){
   window.__statsRowsCache = rows;
+  const hasParticipation = rows.some(r=>r.participationType!==undefined && r.participationType!==null);
   return `
   <div class="stats-scroll">
     <table class="stats-table">
-      <thead><tr><th>#</th><th class="name-cell">選手名</th><th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th>
+      <thead><tr><th>#</th><th class="name-cell">選手名</th>${hasParticipation?'<th>出場形態</th>':''}<th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th>
         <th>サーブ本数</th><th>サーブ効果率</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>ブロック本数</th></tr></thead>
       <tbody>
         ${rows.map((r,i)=>`<tr style="cursor:pointer;" onclick="openPlayerDetail(window.__statsRowsCache[${i}])">
-          <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td><td>${r.setsParticipated}</td>
+          <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td>
+          ${hasParticipation?`<td>${esc(r.participationType||'-')}</td>`:''}
+          <td>${r.setsParticipated}</td>
           <td>${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td>
           <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td>
           <td>${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td>
@@ -253,7 +256,8 @@ function statsRowsHtml(rows){
         </tr>`).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>
+  ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、MCは途中出場（メンバーチェンジ）</p>' : ''}`;
 }
 
 /* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
@@ -294,6 +298,9 @@ function renderPlayerDetailOverlay(){
   const s = state.viewingPlayerDetail;
   if (!s) return '';
   let body = `<p class="muted">出場セット数：${s.setsParticipated}</p>`;
+  if (s.participationType!==undefined && s.participationType!==null){
+    body += `<p class="muted">出場形態：${esc(s.participationType)}${s.participationType==='MC'?'（途中出場）':'（スタメン）'}</p>`;
+  }
 
   if (s.spikeOverall.total>0){
     body += sectionHeadingHtml('スパイク');
@@ -881,7 +888,7 @@ function renderSubstitutionSheet(){
       <button class="mini-slot ${p?'filled':''}" style="${selIndex===i?'outline:3px solid #facc15;':''}"
         onclick="state.subPositionIndex=${i}; render();">
         <div class="c" style="${colorStyle}">${p?p.number:'-'}</div>
-        <div style="font-size:9px;">P${i+1}</div>
+        <div style="font-size:9px;">S${i+1}</div>
         <div style="font-size:10px;">${p?esc(p.name):'空き'}</div>
       </button>`;
   };

@@ -65,6 +65,9 @@ function actuallyStartMatch(){
   }
   saveLastLineupForTeamName('home', state.homeTeamName);
   if (state.trackOpponentStats) saveLastLineupForTeamName('away', state.awayTeamName);
+  // 出場形態（スタメンの位置S1〜S6）の記録用に、開始時点のスタメンを控えておく
+  state.homeStartingLineup = state.homeRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }));
+  state.awayStartingLineup = state.awayRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }));
   state.showLiberoWarning = false;
   state.showingStartingLineup = false;
   // 自チームが最初にサーブする場合、P1の選手を自動でサーブ選手として選択しておく
@@ -112,7 +115,7 @@ function renderLineupSlot(team, index){
   return `
     <button class="mini-slot ${player?'filled':''}" onclick="openLineupPicker('${team}', ${index})">
       <div class="c">${player ? player.number : '+'}</div>
-      <div style="font-size:9px;opacity:.85">P${index+1}</div>
+      <div style="font-size:9px;opacity:.85">S${index+1}</div>
       <div style="font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${player?esc(player.name):'未設定'}</div>
     </button>`;
 }
@@ -126,7 +129,7 @@ function pickLineupLiberoPlayer(playerId){
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
   const already = sel.indexOf(playerId);
   if (already>=0) sel[already] = null;
-  // 同じ選手がスタメン(P1〜P6)にも設定されていたら外す（重複を防ぐ）
+  // 同じ選手がスタメン(S1〜S6)にも設定されていたら外す（重複を防ぐ）
   const rotationIdx = rotation.indexOf(playerId);
   if (rotationIdx>=0) rotation[rotationIdx] = null;
   sel[index] = playerId;
