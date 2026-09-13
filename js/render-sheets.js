@@ -691,16 +691,24 @@ function renderSelectedAggregateTab(teamName){
 
 /// 選択した試合の集計を、印刷（→「PDFとして保存」）できる形式で出力する。
 /// 外部ライブラリを使わず、ブラウザ標準の印刷機能でPDF化する方式
+/// 選択した試合の集計を印刷（→「PDFとして保存」）できる形式で出力する。
+/// 1ページ目：チーム全体成績（各カテゴリの総合値を個人ごとに掲載）
+/// 2ページ目以降：プレーカテゴリ（スパイク/サーブ/キャッチ/レシーブ/トス/ブロック）ごとに1ページ、
+/// 全選手分の「総合」成績を一覧できるようにする
 function printSelectedAggregate(teamName){
   const ids = state.selectedAggregateMatchIds || [];
   if (ids.length===0){ showToast('試合を選択してください'); return; }
   const { players } = statsForSelectedMatches(teamName, ids);
   const agg = aggregateFromPlayerList(players);
+  const withData = (list, hasFn) => list.filter(hasFn);
 
-  const html = `
+  const page = (innerHtml, isLast) => `<div style="${isLast?'':'page-break-after:always;'}">${innerHtml}</div>`;
+
+  // 1ページ目：チーム全体成績。各カテゴリの総合値を選手ごとの表としても掲載する
+  let html = page(`
     <h1>${esc(teamName)}　選択試合の集計</h1>
     <p>対象試合数：${ids.length}件　出力日時：${new Date().toLocaleString('ja-JP')}</p>
-    <h2>チーム成績</h2>
+    <h2>チーム全体成績</h2>
     <table>
       <tr><td>スパイク決定率</td><td>${pct(agg.spikeRate)}</td></tr>
       <tr><td>サーブ効果率</td><td>${pct(agg.serveRate)}</td></tr>
@@ -711,19 +719,92 @@ function printSelectedAggregate(teamName){
       <tr><td>被ブロック数</td><td>${agg.spikeBlocked}</td></tr>
       <tr><td>キャッチミス</td><td>${agg.catchMiss}</td></tr>
     </table>
-    <h2>個人成績</h2>
+    <h2>個人成績（一覧）</h2>
     <table>
-      <tr><th>#</th><th>選手名</th><th>出場セット数</th><th>スパイク本数</th><th>決定率</th><th>スパイクミス</th><th>被ブロック</th>
+      <tr><th>#</th><th>選手名</th><th>出場形態</th><th>出場セット数</th><th>スパイク本数</th><th>決定率</th><th>スパイクミス</th><th>被ブロック</th>
         <th>サーブ本数</th><th>効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>Aパス率</th><th>キャッチミス</th><th>ブロック</th></tr>
       ${players.map(p=>`<tr>
-        <td>${p.player.number}</td><td>${esc(p.player.name)}</td><td>${p.setsParticipated}</td>
+        <td>${p.player.number}</td><td>${esc(p.player.name)}</td><td>${esc(p.participationType||'-')}</td><td>${p.setsParticipated}</td>
         <td>${p.spikeOverall.total}</td><td>${pct(p.spikeOverall.decisionRate)}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td>
         <td>${p.serve.total}</td><td>${pct(p.serve.effectiveRate)}</td><td>${p.serve.miss}</td>
         <td>${p.serveReceiveOverall.total}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td><td>${p.serveReceiveOverall.miss}</td>
         <td>${p.block.decided}</td>
       </tr>`).join('')}
     </table>
-  `;
+  `, false);
+
+  // スパイク（総合）ページ
+  const spikePlayers = withData(players, p=>p.spikeOverall.total>0);
+  html += page(`
+    <h2>スパイク（総合）</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定本数</th><th>ミス数</th><th>被ブロック数</th><th>決定率</th></tr>
+      ${spikePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>`).join('')
+        || '<tr><td colspan="7">記録なし</td></tr>'}
+    </table>
+  `, false);
+
+  // サーブ（総合）ページ
+  const servePlayers = withData(players, p=>p.serve.total>0);
+  html += page(`
+    <h2>サーブ（総合）</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定本数</th><th>効果本数</th><th>ミス数</th><th>効果率</th></tr>
+      ${servePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.serve.total}</td><td>${p.serve.decided}</td><td>${p.serve.effective}</td><td>${p.serve.miss}</td><td>${pct(p.serve.effectiveRate)}</td></tr>`).join('')
+        || '<tr><td colspan="7">記録なし</td></tr>'}
+    </table>
+  `, false);
+
+  // キャッチ（総合）ページ
+  const catchPlayers = withData(players, p=>p.serveReceiveOverall.total>0);
+  html += page(`
+    <h2>キャッチ（総合）</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス数</th><th>Aパス率</th></tr>
+      ${catchPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>`).join('')
+        || '<tr><td colspan="8">記録なし</td></tr>'}
+    </table>
+  `, false);
+
+  // レシーブ（総合）ページ
+  const receivePlayers = withData(players, p=>p.receiveOverall.total>0);
+  html += page(`
+    <h2>レシーブ（総合）</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス数</th><th>Aパス率</th></tr>
+      ${receivePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.receiveOverall.total}</td><td>${p.receiveOverall.aPass}</td><td>${p.receiveOverall.bPass}</td><td>${p.receiveOverall.cPass}</td><td>${p.receiveOverall.miss}</td><td>${pct(p.receiveOverall.aPassRate)}</td></tr>`).join('')
+        || '<tr><td colspan="8">記録なし</td></tr>'}
+    </table>
+  `, false);
+
+  // トスページ
+  const tossPlayers = withData(players, p=>p.toss.total>0);
+  html += page(`
+    <h2>トス</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>トス本数</th><th>成功数</th><th>失敗数</th><th>ミス数</th><th>成功率</th></tr>
+      ${tossPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.toss.total}</td><td>${p.toss.success}</td><td>${p.toss.failure}</td><td>${p.toss.miss}</td><td>${pct(p.toss.successRate)}</td></tr>`).join('')
+        || '<tr><td colspan="7">記録なし</td></tr>'}
+    </table>
+  `, false);
+
+  // ブロックページ（最後のページ）
+  const blockPlayers = withData(players, p=>p.block.decided>0 || p.block.setsPlayed>0);
+  html += page(`
+    <h2>ブロック</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>決定本数</th><th>出場セット数</th><th>セットあたり</th></tr>
+      ${blockPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.block.decided}</td><td>${p.block.setsPlayed}</td><td>${num(p.block.perSet,2)}</td></tr>`).join('')
+        || '<tr><td colspan="5">記録なし</td></tr>'}
+    </table>
+  `, true);
+
   const printArea = document.getElementById('print-area');
   if (!printArea){ showToast('印刷用の領域が見つかりませんでした'); return; }
   printArea.innerHTML = html;
