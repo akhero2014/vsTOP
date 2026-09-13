@@ -38,7 +38,7 @@
     #app{display:none;}
   }
   #print-area{display:none;}
-  @page{ size: landscape; margin: 12mm; }
+  @page{ size: landscape; margin: 4mm; }
   @media print{
     body > *:not(#print-area){display:none !important;}
     #print-area{display:block !important;padding:0;font-family:sans-serif;color:#000;}
@@ -242,7 +242,11 @@
 <script src="js/render-home.js"></script>
 <script src="js/render-lineup.js"></script>
 <script src="js/render-match.js"></script>
-<script src="js/render-sheets.js"></script>
+<script src="js/render-settings.js"></script>
+<script src="js/render-stats-sheet.js"></script>
+<script src="js/render-records.js"></script>
+<script src="js/render-records-extra.js"></script>
+<script src="js/render-gameprep.js"></script>
 <script src="js/main.js"></script>
 <script>
   // Service Workerの登録（オフラインでも起動できるようにする）。
