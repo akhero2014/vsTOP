@@ -19,6 +19,16 @@ function receiveStats(events, name){
   return { name, total, aPass, bPass, cPass, miss, aPassRate: total>0 ? aPass/total*100 : null };
 }
 
+/// サーブの種類別（ジャンプ/フローター等）の内訳を計算する
+function serveTypeStats(events, name){
+  const total = events.length;
+  const decided = events.filter(e=>e.resultLabel==='エース').length;
+  const effective = events.filter(e=>e.resultLabel==='効果あり').length;
+  const miss = events.filter(e=>e.resultLabel==='ミス').length;
+  const effectiveRate = total>0 ? (decided*100 + effective*25 - miss*25) / total : null;
+  return { name, total, decided, effective, miss, effectiveRate };
+}
+
 function computeDetailedStats(events, setsPlayed, player){
   const attacks = events.filter(e=>e.playType==='attack');
   const spikeOverall = spikeStats(attacks, '総合');
@@ -34,6 +44,8 @@ function computeDetailedStats(events, setsPlayed, player){
   };
   serveStatsV.effectiveRate = serveStatsV.total>0
     ? (serveStatsV.decided*100 + serveStatsV.effective*25 - serveStatsV.miss*25) / serveStatsV.total : null;
+  const serveTypeNames = [...new Set(serves.map(e=>e.subType).filter(Boolean))].sort();
+  const serveByType = serveTypeNames.map(t=>serveTypeStats(serves.filter(e=>e.subType===t), t));
 
   const tosses = events.filter(e=>e.playType==='toss');
   const tossStatsV = {
@@ -58,7 +70,7 @@ function computeDetailedStats(events, setsPlayed, player){
   const blockStatsV = { decided: blocks.filter(e=>e.resultLabel==='決定').length, setsPlayed };
   blockStatsV.perSet = setsPlayed>0 ? blockStatsV.decided/setsPlayed : null;
 
-  return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, toss:tossStatsV,
+  return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
     serveReceiveOverall:srOverall, serveReceiveByType:srByType, receiveOverall:recOverall, receiveByType:recByType,
     block:blockStatsV };
 }
