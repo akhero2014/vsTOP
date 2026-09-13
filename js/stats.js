@@ -5,8 +5,9 @@
 function spikeStats(events, name){
   const total = events.length;
   const decided = events.filter(e=>e.resultLabel==='決定').length;
-  const miss = events.filter(e=>e.outcome==='opponent').length;
-  return { name, total, decided, miss, decisionRate: total>0 ? decided/total*100 : null };
+  const miss = events.filter(e=>e.resultLabel==='ミス').length;
+  const blocked = events.filter(e=>e.resultLabel==='相手ブロック').length;
+  return { name, total, decided, miss, blocked, decisionRate: total>0 ? decided/total*100 : null };
 }
 
 function receiveStats(events, name){
@@ -14,7 +15,8 @@ function receiveStats(events, name){
   const aPass = events.filter(e=>e.resultLabel==='Aパス').length;
   const bPass = events.filter(e=>e.resultLabel==='Bパス').length;
   const cPass = events.filter(e=>e.resultLabel==='Cパス').length;
-  return { name, total, aPass, bPass, cPass, aPassRate: total>0 ? aPass/total*100 : null };
+  const miss = events.filter(e=>e.resultLabel==='ミス').length;
+  return { name, total, aPass, bPass, cPass, miss, aPassRate: total>0 ? aPass/total*100 : null };
 }
 
 function computeDetailedStats(events, setsPlayed, player){
@@ -134,17 +136,22 @@ function currentAsMatchRecord(){
 }
 
 /// 指定したチーム名が関わった試合だけを返す（進行中の試合＋過去の試合）
+/// 表記ゆれ対策：チーム名にエイリアスが設定されていれば、統合先の名前に変換する
+function resolveTeamName(name){
+  return (state.teamNameAliases && state.teamNameAliases[name]) || name;
+}
+
 function matchesInvolvingTeamName(teamName){
   const list = [];
   const current = currentAsMatchRecord();
-  if (current && (current.homeTeamName===teamName || current.awayTeamName===teamName)) list.push(current);
-  state.matchHistory.forEach(m=>{ if (m.homeTeamName===teamName || m.awayTeamName===teamName) list.push(m); });
+  if (current && (resolveTeamName(current.homeTeamName)===teamName || resolveTeamName(current.awayTeamName)===teamName)) list.push(current);
+  state.matchHistory.forEach(m=>{ if (resolveTeamName(m.homeTeamName)===teamName || resolveTeamName(m.awayTeamName)===teamName) list.push(m); });
   return list;
 }
-/// その試合の中で、指定したチーム名がhome/awayどちら側だったか
+/// その試合の中で、指定したチーム名（表記ゆれ統合後）がhome/awayどちら側だったか
 function sideForTeamInMatch(match, teamName){
-  if (match.homeTeamName===teamName) return 'home';
-  if (match.awayTeamName===teamName) return 'away';
+  if (resolveTeamName(match.homeTeamName)===teamName) return 'home';
+  if (resolveTeamName(match.awayTeamName)===teamName) return 'away';
   return null;
 }
 function eventsForTeamNameByMatch(teamName){
@@ -198,29 +205,30 @@ function allUsedOpponentAttackTypesForTeamName(teamName){
 /// これまでに登場したことのある全チーム名（記録画面のチーム選択用）
 function allKnownTeamNamesForRecords(){
   const names = new Set();
-  state.knownTeamNames.forEach(n=>names.add(n));
-  state.matchHistory.forEach(m=>{ names.add(m.homeTeamName); names.add(m.awayTeamName); });
+  state.knownTeamNames.forEach(n=>names.add(resolveTeamName(n)));
+  state.matchHistory.forEach(m=>{ names.add(resolveTeamName(m.homeTeamName)); names.add(resolveTeamName(m.awayTeamName)); });
   const current = currentAsMatchRecord();
-  if (current){ names.add(current.homeTeamName); names.add(current.awayTeamName); }
+  if (current){ names.add(resolveTeamName(current.homeTeamName)); names.add(resolveTeamName(current.awayTeamName)); }
   return [...names].sort((a,b)=>a.localeCompare(b,'ja'));
 }
 /// 記録画面を開いたときのデフォルト選択（自チーム）
 function defaultRecordsTeamName(){
-  return state.myTeamName || state.homeTeamName;
+  return resolveTeamName(state.myTeamName || state.homeTeamName);
 }
 
 /* ---- 選手別詳細成績のリストから、チーム全体の集計値を求める（通算タブ・単一試合タブ共通） ---- */
 
 function aggregateFromPlayerList(list){
-  const spike = list.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided}), {total:0,decided:0});
+  const spike = list.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided, miss:s.miss+p.spikeOverall.miss, blocked:s.blocked+p.spikeOverall.blocked}), {total:0,decided:0,miss:0,blocked:0});
   const serve = list.reduce((s,p)=>({total:s.total+p.serve.total, decided:s.decided+p.serve.decided, effective:s.effective+p.serve.effective, miss:s.miss+p.serve.miss}), {total:0,decided:0,effective:0,miss:0});
-  const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass}), {total:0,aPass:0});
+  const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass, miss:s.miss+p.serveReceiveOverall.miss}), {total:0,aPass:0,miss:0});
   const totalBlocks = list.reduce((s,p)=>s+p.block.decided, 0);
   return {
     spikeRate: spike.total>0 ? spike.decided/spike.total*100 : null,
     serveRate: serve.total>0 ? (serve.decided*100+serve.effective*25-serve.miss*25)/serve.total : null,
     catchRate: rec.total>0 ? rec.aPass/rec.total*100 : null,
     totalBlocks,
+    serveMiss: serve.miss, spikeMiss: spike.miss, spikeBlocked: spike.blocked, catchMiss: rec.miss,
   };
 }
 

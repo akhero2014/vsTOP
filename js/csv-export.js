@@ -10,13 +10,13 @@ function csvEscape(text){
 function fmt(v, digits){ return v===null||v===undefined ? '' : v.toFixed(digits===undefined?1:digits); }
 
 function simpleStatsCSV(rows, filename){
-  const lines = ['#,選手名,出場セット数,スパイク本数,スパイク決定率(%),サーブ本数,サーブ効果率(%),キャッチ本数,キャッチAパス率(%),ブロック本数'];
+  const lines = ['#,選手名,出場セット数,スパイク本数,スパイク決定率(%),スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチAパス率(%),キャッチミス,ブロック本数'];
   for (const r of rows){
     lines.push([
       r.player.number, csvEscape(r.player.name), r.setsParticipated,
-      r.spikeOverall.total, fmt(r.spikeOverall.decisionRate),
-      r.serve.total, fmt(r.serve.effectiveRate),
-      r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.aPassRate),
+      r.spikeOverall.total, fmt(r.spikeOverall.decisionRate), r.spikeOverall.miss, r.spikeOverall.blocked,
+      r.serve.total, fmt(r.serve.effectiveRate), r.serve.miss,
+      r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.aPassRate), r.serveReceiveOverall.miss,
       r.block.decided,
     ].join(','));
   }
@@ -344,4 +344,3 @@ function downloadBlob(blob, filename){
   URL.revokeObjectURL(url);
   showToast('ダウンロードしました：'+filename);
 }
-

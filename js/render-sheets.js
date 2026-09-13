@@ -242,22 +242,22 @@ function statsRowsHtml(rows){
   return `
   <div class="stats-scroll">
     <table class="stats-table">
-      <thead><tr><th>#</th><th class="name-cell">選手名</th>${hasParticipation?'<th>出場形態</th>':''}<th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th>
-        <th>サーブ本数</th><th>サーブ効果率</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>ブロック本数</th></tr></thead>
+      <thead><tr><th>#</th><th class="name-cell">選手名</th>${hasParticipation?'<th>出場形態</th>':''}<th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th><th>スパイクミス</th><th>被ブロック数</th>
+        <th>サーブ本数</th><th>サーブ効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>キャッチミス</th><th>ブロック本数</th></tr></thead>
       <tbody>
         ${rows.map((r,i)=>`<tr style="cursor:pointer;" onclick="openPlayerDetail(window.__statsRowsCache[${i}])">
           <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td>
           ${hasParticipation?`<td>${esc(r.participationType||'-')}</td>`:''}
           <td>${r.setsParticipated}</td>
-          <td>${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td>
-          <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td>
-          <td>${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td>
+          <td>${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td><td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
+          <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
+          <td>${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td><td>${r.serveReceiveOverall.miss}</td>
           <td>${r.block.decided}</td>
         </tr>`).join('')}
       </tbody>
     </table>
   </div>
-  ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、MCは途中出場（メンバーチェンジ）</p>' : ''}`;
+  ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、L1/L2はリベロ、MCは途中出場（メンバーチェンジ）</p>' : ''}`;
 }
 
 /* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
@@ -280,6 +280,7 @@ function spikeRowHtml(row){
     ${statLine('総数', row.total)}
     ${statLine('決定本数', row.decided)}
     ${statLine('ミス数', row.miss)}
+    ${statLine('被ブロック数', row.blocked)}
     ${statLine('決定率', pct(row.decisionRate))}
   `);
 }
@@ -290,6 +291,7 @@ function receiveRowHtml(row){
     ${statLine('Aパス', row.aPass)}
     ${statLine('Bパス', row.bPass)}
     ${statLine('Cパス', row.cPass)}
+    ${statLine('ミス数', row.miss)}
     ${statLine('Aパス率', pct(row.aPassRate))}
   `);
 }
@@ -372,6 +374,10 @@ function teamAggregateRowsHtml(agg, opponentErrors){
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(agg.catchRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">ブロック</span><strong>${agg.totalBlocks}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">サーブミス</span><strong>${agg.serveMiss}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">スパイクミス</span><strong>${agg.spikeMiss}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">被ブロック数</span><strong>${agg.spikeBlocked}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチミス</span><strong>${agg.catchMiss}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">相手ミスによる得点</span><strong>${opponentErrors}</strong></div>
   </div>`;
 }
@@ -402,13 +408,65 @@ function renderStatsSheet(){
 function recordsTeamSwitcherHtml(){
   if (!state.recordsTeamName) state.recordsTeamName = defaultRecordsTeamName();
   const names = allKnownTeamNamesForRecords();
-  return `
-  <div class="row gap8" style="margin-bottom:12px;align-items:center;">
+  let html = `
+  <div class="row gap8" style="margin-bottom:8px;align-items:center;">
     <span class="muted">チーム：</span>
     <select class="field" style="max-width:260px;" onchange="state.recordsTeamName=this.value; state.selectedMatchForDetail=null; state.csvSelectedMatchIds=[]; render();">
       ${names.map(n=>`<option value="${esc(n)}" ${n===state.recordsTeamName?'selected':''}>${esc(n)}</option>`).join('')}
     </select>
+    <button class="btn small" onclick="toggleTeamNameMerge()">${state.showingTeamNameMerge?'閉じる':'チーム名を編集'}</button>
   </div>`;
+  if (state.showingTeamNameMerge){
+    html += `<div class="card" style="margin-bottom:12px;">
+      <p class="muted" style="margin-bottom:8px;">表記ゆれのあるチーム名（例：「広島東」と「広島東高校」）を1つにまとめて、通算成績を正しく集計できるようにします。</p>
+      ${renderTeamNameMergeList()}
+    </div>`;
+  }
+  return html;
+}
+
+/* ---- チーム名の統合・編集（表記ゆれ対策、promptは使わずインライン編集） ---- */
+
+function toggleTeamNameMerge(){ state.showingTeamNameMerge = !state.showingTeamNameMerge; render(); }
+function startEditTeamAlias(name){ state.editingTeamAliasFor = name; state.teamAliasDraft = state.teamNameAliases[name] || name; render(); }
+function cancelEditTeamAlias(){ state.editingTeamAliasFor = null; render(); }
+function confirmEditTeamAlias(){
+  const name = state.editingTeamAliasFor;
+  const trimmed = (state.teamAliasDraft||'').trim();
+  if (!trimmed || trimmed===name) delete state.teamNameAliases[name];
+  else state.teamNameAliases[name] = trimmed;
+  state.editingTeamAliasFor = null;
+  // 統合した結果、今選んでいるチーム名がもう存在しなくなる場合はデフォルトに戻す
+  if (!allKnownTeamNamesForRecords().includes(state.recordsTeamName)) state.recordsTeamName = defaultRecordsTeamName();
+  render();
+}
+function allRawTeamNames(){
+  const names = new Set();
+  state.knownTeamNames.forEach(n=>names.add(n));
+  state.matchHistory.forEach(m=>{ names.add(m.homeTeamName); names.add(m.awayTeamName); });
+  const current = currentAsMatchRecord();
+  if (current){ names.add(current.homeTeamName); names.add(current.awayTeamName); }
+  return [...names].sort((a,b)=>a.localeCompare(b,'ja'));
+}
+function renderTeamNameMergeList(){
+  const names = allRawTeamNames();
+  if (names.length===0) return '<p class="muted">まだチーム名がありません</p>';
+  return names.map(n=>{
+    if (state.editingTeamAliasFor===n){
+      return `
+      <div class="list-item">
+        <input class="field grow-text" value="${esc(state.teamAliasDraft||'')}" oninput="state.teamAliasDraft=this.value"
+          onkeydown="if(event.key==='Enter'){confirmEditTeamAlias();}">
+        <button class="btn small primary" onclick="confirmEditTeamAlias()">保存</button>
+        <button class="btn small" onclick="cancelEditTeamAlias()">取消</button>
+      </div>`;
+    }
+    return `
+    <div class="list-item">
+      <span class="grow-text">${esc(n)}${state.teamNameAliases[n] ? ' → <strong style="color:var(--blue)">'+esc(state.teamNameAliases[n])+'</strong>' : ''}</span>
+      <button class="btn small" onclick="startEditTeamAlias('${n.replace(/'/g,"\\'")}')">編集</button>
+    </div>`;
+  }).join('');
 }
 
 function renderRecordsSheet(){
@@ -422,6 +480,7 @@ function renderRecordsSheet(){
       <button class="${tab==='team'?'active':''}" onclick="state.recordsTab='team'; render();">チーム通算</button>
       <button class="${tab==='players'?'active':''}" onclick="state.recordsTab='players'; render();">個人通算</button>
       <button class="${tab==='rankings'?'active':''}" onclick="state.recordsTab='rankings'; render();">ランキング</button>
+      <button class="${tab==='selected'?'active':''}" onclick="state.recordsTab='selected'; render();">選択集計</button>
       <button class="${tab==='csv'?'active':''}" onclick="state.recordsTab='csv'; render();">CSV出力</button>
     </div>`;
 
@@ -429,6 +488,7 @@ function renderRecordsSheet(){
   else if (tab==='team') body += renderTeamCareerTab(teamName);
   else if (tab==='players') body += renderPlayersCareerTab(teamName);
   else if (tab==='rankings') body += renderRankingsBody(teamName);
+  else if (tab==='selected') body += renderSelectedAggregateTab(teamName);
   else if (tab==='csv') body += renderCsvTab(teamName);
 
   return sheetShell('これまでの記録', body, 'max-width:900px;');
@@ -571,6 +631,104 @@ function renderNameMergeList(teamName){
 }
 
 /* ---- CSV出力（そのチーム名が関わった試合のみが対象） ---- */
+
+/* ---- 選択集計：自由に選んだ試合だけで通算成績を見る（今日の試合だけ、など） ---- */
+
+function statsForSelectedMatches(teamName, matchIds){
+  const matches = matchesInvolvingTeamName(teamName).filter(m=>matchIds.includes(m.id));
+  const eventGroups = matches.map(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    return side ? m.rallyLog.filter(e=>e.team===side) : [];
+  });
+  return { matches, players: detailedStatsForAllPlayersFromMatches(eventGroups) };
+}
+
+function toggleSelectedAggregateMatch(id){
+  if (!state.selectedAggregateMatchIds) state.selectedAggregateMatchIds = [];
+  const idx = state.selectedAggregateMatchIds.indexOf(id);
+  if (idx>=0) state.selectedAggregateMatchIds.splice(idx,1);
+  else state.selectedAggregateMatchIds.push(id);
+  render();
+}
+
+function renderSelectedAggregateTab(teamName){
+  if (!state.selectedAggregateMatchIds) state.selectedAggregateMatchIds = [];
+  const matches = matchesInvolvingTeamName(teamName);
+  const ids = state.selectedAggregateMatchIds;
+
+  let html = `<p class="muted">集計したい試合を自由に選んでください（例：今日の試合だけ、特定の大会だけ、など）。</p>`;
+  html += matches.map(m=>{
+    const label = m.id==='current' ? '進行中：'+m.homeTeamName+' vs '+m.awayTeamName
+      : new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName;
+    const checked = ids.includes(m.id);
+    return `
+    <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleSelectedAggregateMatch('${m.id}')"> ${esc(label)}
+    </label>`;
+  }).join('') || '<p class="muted">まだ試合記録がありません</p>';
+
+  if (ids.length>0){
+    const { matches:selMatches, players } = statsForSelectedMatches(teamName, ids);
+    const agg = aggregateFromPlayerList(players);
+    let opponentErrors = 0;
+    selMatches.forEach(m=>{
+      const side = sideForTeamInMatch(m, teamName);
+      if (side==='home'){
+        opponentErrors += (m.id==='current')
+          ? (state.trackOpponentStats ? opponentErrorsBenefiting('home') : state.opponentMistakePoints)
+          : (m.homeOpponentErrors||0);
+      }
+    });
+    html += `<h3 style="margin-top:16px;">選択した${ids.length}試合の集計（${esc(teamName)}）</h3>`;
+    html += teamAggregateRowsHtml(agg, opponentErrors);
+    html += `<button class="btn" style="width:100%;margin-bottom:12px;" onclick="printSelectedAggregate('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFで出力する（印刷）</button>`;
+    html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
+  } else {
+    html += '<p class="muted" style="margin-top:12px;">試合を選択すると、ここに集計結果が表示されます。</p>';
+  }
+  return html;
+}
+
+/// 選択した試合の集計を、印刷（→「PDFとして保存」）できる形式で出力する。
+/// 外部ライブラリを使わず、ブラウザ標準の印刷機能でPDF化する方式
+function printSelectedAggregate(teamName){
+  const ids = state.selectedAggregateMatchIds || [];
+  if (ids.length===0){ showToast('試合を選択してください'); return; }
+  const { players } = statsForSelectedMatches(teamName, ids);
+  const agg = aggregateFromPlayerList(players);
+
+  const html = `
+    <h1>${esc(teamName)}　選択試合の集計</h1>
+    <p>対象試合数：${ids.length}件　出力日時：${new Date().toLocaleString('ja-JP')}</p>
+    <h2>チーム成績</h2>
+    <table>
+      <tr><td>スパイク決定率</td><td>${pct(agg.spikeRate)}</td></tr>
+      <tr><td>サーブ効果率</td><td>${pct(agg.serveRate)}</td></tr>
+      <tr><td>キャッチAパス率</td><td>${pct(agg.catchRate)}</td></tr>
+      <tr><td>ブロック</td><td>${agg.totalBlocks}</td></tr>
+      <tr><td>サーブミス</td><td>${agg.serveMiss}</td></tr>
+      <tr><td>スパイクミス</td><td>${agg.spikeMiss}</td></tr>
+      <tr><td>被ブロック数</td><td>${agg.spikeBlocked}</td></tr>
+      <tr><td>キャッチミス</td><td>${agg.catchMiss}</td></tr>
+    </table>
+    <h2>個人成績</h2>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>出場セット数</th><th>スパイク本数</th><th>決定率</th><th>スパイクミス</th><th>被ブロック</th>
+        <th>サーブ本数</th><th>効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>Aパス率</th><th>キャッチミス</th><th>ブロック</th></tr>
+      ${players.map(p=>`<tr>
+        <td>${p.player.number}</td><td>${esc(p.player.name)}</td><td>${p.setsParticipated}</td>
+        <td>${p.spikeOverall.total}</td><td>${pct(p.spikeOverall.decisionRate)}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td>
+        <td>${p.serve.total}</td><td>${pct(p.serve.effectiveRate)}</td><td>${p.serve.miss}</td>
+        <td>${p.serveReceiveOverall.total}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td><td>${p.serveReceiveOverall.miss}</td>
+        <td>${p.block.decided}</td>
+      </tr>`).join('')}
+    </table>
+  `;
+  const printArea = document.getElementById('print-area');
+  if (!printArea){ showToast('印刷用の領域が見つかりませんでした'); return; }
+  printArea.innerHTML = html;
+  window.print();
+}
 
 function renderCsvTab(teamName){
   const matches = matchesInvolvingTeamName(teamName);

@@ -37,6 +37,14 @@
     .rotate-overlay .ic{font-size:64px;}
     #app{display:none;}
   }
+  #print-area{display:none;}
+  @media print{
+    body > *:not(#print-area){display:none !important;}
+    #print-area{display:block !important;padding:24px;font-family:sans-serif;color:#000;}
+    #print-area table{border-collapse:collapse;width:100%;margin-bottom:16px;font-size:12px;}
+    #print-area th, #print-area td{border:1px solid #999;padding:6px 8px;text-align:center;}
+    #print-area h1{font-size:20px;} #print-area h2{font-size:16px;margin-top:20px;}
+  }
   body{margin:0;background:var(--gray-bg);color:var(--ink);-webkit-tap-highlight-color:transparent;}
   button{font:inherit;cursor:pointer;border:none;background:none;color:inherit;}
   input,select{font:inherit;}
@@ -221,6 +229,7 @@
   <div style="font-size:14px;opacity:.85;">vsTOPは横画面での利用を前提としています</div>
 </div>
 <div id="app"></div>
+<div id="print-area"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="js/state.js"></script>
 <script src="js/game-logic.js"></script>
