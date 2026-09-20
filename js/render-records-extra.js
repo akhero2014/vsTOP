@@ -130,9 +130,18 @@ async function loadJapaneseFontBase64(){
   }
   if (!response){
     response = await fetch(PDF_JP_FONT_URL);
-    if (!response.ok) throw new Error('日本語フォントの取得に失敗しました（status ' + response.status + '）');
+    if (!response.ok) throw new Error('日本語フォントの取得に失敗しました（HTTPステータス ' + response.status + '）');
   }
   const buffer = await response.arrayBuffer();
+
+  // Git LFS管理のファイルだと、実体ではなく数百バイトのポインター情報しか返ってこないことがある。
+  // 本物のTTFなら通常1MBを大きく超えるため、極端に小さい場合はここで検知して分かりやすいエラーにする
+  if (buffer.byteLength < 100000){
+    const text = new TextDecoder().decode(buffer.slice(0, 200));
+    console.error('日本語フォントの取得内容が異常に小さいです（' + buffer.byteLength + 'バイト）。内容の先頭：', text);
+    throw new Error('日本語フォントの取得に失敗しました（取得先が本物のフォントファイルではない可能性があります。サイズ：' + buffer.byteLength + 'バイト）');
+  }
+
   const base64 = arrayBufferToBase64(buffer);
   window.__jpFontBase64 = base64;
   return base64;
@@ -159,8 +168,8 @@ async function generatePdfOnline(teamName){
     doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
     doc.setFont('NotoSansJP');
   }catch(err){
-    showToast('PDFの生成に失敗しました。インターネット接続を確認してもう一度お試しください。');
     console.error('PDF生成エラー:', err);
+    showToast('PDFの生成に失敗しました：' + (err && err.message ? err.message : 'unknown error'));
     return;
   }
 
