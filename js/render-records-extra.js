@@ -50,6 +50,16 @@ function renderSelectedAggregateTab(teamName){
     html += teamAggregateRowsHtml(agg, opponentErrors);
     html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ インターネットに接続されている場合は、URLの入らないきれいなPDFを直接生成します（初回はフォントの読み込みに時間がかかります）。オフラインの場合、または生成に失敗した場合は、自動的に印刷機能（→「PDFとして保存」）に切り替わります。</p>
     <button class="btn" style="width:100%;margin-bottom:12px;" onclick="exportSelectedAggregatePdf('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
+
+    if (state.pdfFallbackPrompt && state.pdfFallbackPrompt.teamName===teamName){
+      html += `<div class="card" style="margin-bottom:12px;background:rgba(239,68,68,.08);">
+        <p>${esc(state.pdfFallbackPrompt.reason)}印刷機能でPDFを作成しますか？</p>
+        <div class="row gap8">
+          <button class="btn primary" onclick="confirmPdfFallback()">印刷機能で作成する</button>
+          <button class="btn" onclick="cancelPdfFallback()">キャンセル</button>
+        </div>
+      </div>`;
+    }
     html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
   } else {
     html += '<p class="muted" style="margin-top:12px;">試合を選択すると、ここに集計結果が表示されます。</p>';
@@ -332,18 +342,27 @@ async function exportSelectedAggregatePdf(teamName){
   if (ids.length===0){ showToast('試合を選択してください'); return; }
 
   if (typeof navigator!=='undefined' && navigator.onLine===false){
-    showToast('オフラインのため、印刷機能でPDFを作成します');
-    printSelectedAggregateFallback(teamName);
+    state.pdfFallbackPrompt = { teamName, reason: 'オフラインです。' };
+    render();
     return;
   }
   try{
     await generatePdfOnline(teamName);
   }catch(err){
-    console.error('オンラインPDF生成に失敗、印刷方式に切り替えます:', err);
-    showToast('オンラインでの生成に失敗したため、印刷機能に切り替えます（' + (err && err.message ? err.message : 'unknown error') + '）');
-    printSelectedAggregateFallback(teamName);
+    console.error('オンラインPDF生成に失敗:', err);
+    state.pdfFallbackPrompt = { teamName, reason: 'オンラインでの生成に失敗しました（' + (err && err.message ? err.message : 'unknown error') + '）。' };
+    render();
   }
 }
+
+/// 失敗した/オフラインだった時に表示する確認：印刷機能で生成するか、ユーザーに選んでもらう
+function confirmPdfFallback(){
+  const p = state.pdfFallbackPrompt;
+  if (!p) return;
+  state.pdfFallbackPrompt = null;
+  printSelectedAggregateFallback(p.teamName);
+}
+function cancelPdfFallback(){ state.pdfFallbackPrompt = null; render(); }
 
 /// オフライン時・オンライン生成失敗時のフォールバック：ブラウザの印刷機能（→「PDFとして保存」）を使う方式。
 /// URLやヘッダー/フッターの非表示、横向き・余白の指定は端末の印刷設定に依存する。
