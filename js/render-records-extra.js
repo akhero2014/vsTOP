@@ -77,8 +77,14 @@ function renderSelectedAggregateTab(teamName){
 
 const PDF_JP_FONT_URL = 'https://cdn.jsdelivr.net/gh/kongou-ae/font@master/NotoSansJP-Regular.ttf';
 const PDF_FONT_CACHE_NAME = 'vstop-pdf-font-cache-v1';
-const PDF_JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-const PDF_AUTOTABLE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
+const PDF_JSPDF_URLS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+];
+const PDF_AUTOTABLE_URLS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js',
+];
 
 function loadScriptOnce(src){
   return new Promise((resolve, reject)=>{
@@ -92,16 +98,31 @@ function loadScriptOnce(src){
   });
 }
 
+/// 複数のCDN候補を順番に試し、どれか1つでも読み込めれば成功とする
+async function loadScriptWithFallback(urls){
+  let lastError = null;
+  for (const url of urls){
+    try{
+      await loadScriptOnce(url);
+      return;
+    }catch(err){
+      console.warn('CDNからの読み込みに失敗、次の候補を試します:', url, err);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('すべてのCDN候補からの読み込みに失敗しました');
+}
+
 async function ensurePdfLibrariesLoaded(){
   if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
-    await loadScriptOnce(PDF_JSPDF_URL);
+    await loadScriptWithFallback(PDF_JSPDF_URLS);
   }
   if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
-    throw new Error('jsPDFの読み込みに失敗しました（インターネット接続をご確認ください）');
+    throw new Error('jsPDFの読み込みに失敗しました（インターネット接続、または広告ブロッカー等の拡張機能をご確認ください）');
   }
   const proto = window.jspdf.jsPDF.prototype;
   if (typeof proto.autoTable !== 'function'){
-    await loadScriptOnce(PDF_AUTOTABLE_URL);
+    await loadScriptWithFallback(PDF_AUTOTABLE_URLS);
   }
   if (typeof proto.autoTable !== 'function'){
     throw new Error('表組みライブラリ（autoTable）の読み込みに失敗しました');
@@ -182,7 +203,6 @@ async function generatePdfOnline(teamName){
   const headStyle = { font:'NotoSansJP', fontStyle:'normal', fillColor:[59,130,246] };
   let firstSection = true;
   const startNewSection = () => { if (!firstSection) doc.addPage(); firstSection = false; };
-  const nextY = () => (doc.lastAutoTable ? doc.lastAutoTable.finalY : 20) + 8;
 
   // ---- ページ1：チーム全体成績 ----
   startNewSection();
@@ -208,10 +228,11 @@ async function generatePdfOnline(teamName){
   const spikePlayers = players.filter(p=>p.spikeOverall.total>0)
     .sort((a,b)=>(b.spikeOverall.decisionRate??-1)-(a.spikeOverall.decisionRate??-1));
   if (spikePlayers.length){
-    doc.setFontSize(11);
-    doc.text('スパイク（総合・決定率順）', 10, nextY());
+    startNewSection();
+    doc.setFontSize(14);
+    doc.text('スパイク（総合・決定率順）', 10, 14);
     doc.autoTable({
-      startY: nextY()+2, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
+      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
       head: [['#','選手名','総数','決定','ミス','被ブロック','決定率']],
       body: spikePlayers.map(p=>[p.player.number, p.player.name, p.spikeOverall.total, p.spikeOverall.decided, p.spikeOverall.miss, p.spikeOverall.blocked, pct(p.spikeOverall.decisionRate)]),
     });
@@ -219,10 +240,11 @@ async function generatePdfOnline(teamName){
   const servePlayers = players.filter(p=>p.serve.total>0)
     .sort((a,b)=>(b.serve.effectiveRate??-1)-(a.serve.effectiveRate??-1));
   if (servePlayers.length){
-    doc.setFontSize(11);
-    doc.text('サーブ（総合・効果率順）', 10, nextY());
+    startNewSection();
+    doc.setFontSize(14);
+    doc.text('サーブ（総合・効果率順）', 10, 14);
     doc.autoTable({
-      startY: nextY()+2, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
+      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
       head: [['#','選手名','総数','決定','効果','ミス','効果率']],
       body: servePlayers.map(p=>[p.player.number, p.player.name, p.serve.total, p.serve.decided, p.serve.effective, p.serve.miss, pct(p.serve.effectiveRate)]),
     });
@@ -230,10 +252,11 @@ async function generatePdfOnline(teamName){
   const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
     .sort((a,b)=>(b.serveReceiveOverall.aPassRate??-1)-(a.serveReceiveOverall.aPassRate??-1));
   if (catchPlayers.length){
-    doc.setFontSize(11);
-    doc.text('キャッチ（総合・Aパス率順）', 10, nextY());
+    startNewSection();
+    doc.setFontSize(14);
+    doc.text('キャッチ（総合・Aパス率順）', 10, 14);
     doc.autoTable({
-      startY: nextY()+2, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
+      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
       head: [['#','選手名','総数','Aパス','Bパス','Cパス','ミス','Aパス率']],
       body: catchPlayers.map(p=>[p.player.number, p.player.name, p.serveReceiveOverall.total, p.serveReceiveOverall.aPass, p.serveReceiveOverall.bPass, p.serveReceiveOverall.cPass, p.serveReceiveOverall.miss, pct(p.serveReceiveOverall.aPassRate)]),
     });
@@ -395,28 +418,34 @@ function printSelectedAggregateFallback(teamName){
       <tr><td>被ブロック数</td><td>${agg.spikeBlocked}</td></tr>
       <tr><td>キャッチミス</td><td>${agg.catchMiss}</td></tr>
     </table>
-    ${spikePlayers.length ? `
-    <h3>スパイク（総合・決定率順）</h3>
+  `);
+  if (spikePlayers.length){
+    pages.push(`
+    <h2>スパイク（総合・決定率順）</h2>
     <table>
       <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
       ${spikePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
         <td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>`).join('')}
-    </table>` : ''}
-    ${servePlayers.length ? `
-    <h3>サーブ（総合・効果率順）</h3>
+    </table>`);
+  }
+  if (servePlayers.length){
+    pages.push(`
+    <h2>サーブ（総合・効果率順）</h2>
     <table>
       <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>効果</th><th>ミス</th><th>効果率</th></tr>
       ${servePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
         <td>${p.serve.total}</td><td>${p.serve.decided}</td><td>${p.serve.effective}</td><td>${p.serve.miss}</td><td>${pct(p.serve.effectiveRate)}</td></tr>`).join('')}
-    </table>` : ''}
-    ${catchPlayers.length ? `
-    <h3>キャッチ（総合・Aパス率順）</h3>
+    </table>`);
+  }
+  if (catchPlayers.length){
+    pages.push(`
+    <h2>キャッチ（総合・Aパス率順）</h2>
     <table>
       <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
       ${catchPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
         <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>`).join('')}
-    </table>` : ''}
-  `);
+    </table>`);
+  }
 
   const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
   const nameForIdIn = (m, id) => {
