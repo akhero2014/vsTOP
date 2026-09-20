@@ -48,8 +48,8 @@ function renderSelectedAggregateTab(teamName){
     });
     html += `<h3 style="margin-top:16px;">選択した${ids.length}試合の集計（${esc(teamName)}）</h3>`;
     html += teamAggregateRowsHtml(agg, opponentErrors);
-    html += `<p class="muted" style="font-size:12px;background:rgba(239,68,68,.08);padding:8px;border-radius:8px;">⚠️ PDF生成にはインターネットへの接続が必要です（PDF作成ライブラリと日本語フォントを外部から読み込むため）。初回はフォントのダウンロードに少し時間がかかります。</p>
-    <button class="btn" style="width:100%;margin-bottom:12px;" onclick="generatePdfOnline('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを生成する（要インターネット接続）</button>`;
+    html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ インターネットに接続されている場合は、URLの入らないきれいなPDFを直接生成します（初回はフォントの読み込みに時間がかかります）。オフラインの場合、または生成に失敗した場合は、自動的に印刷機能（→「PDFとして保存」）に切り替わります。</p>
+    <button class="btn" style="width:100%;margin-bottom:12px;" onclick="exportSelectedAggregatePdf('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
     html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
   } else {
     html += '<p class="muted" style="margin-top:12px;">試合を選択すると、ここに集計結果が表示されます。</p>';
@@ -157,21 +157,14 @@ async function generatePdfOnline(teamName){
 
   showToast('PDFを生成しています…（初回はフォントの読み込みに時間がかかることがあります）');
 
-  let doc;
-  try{
-    await ensurePdfLibrariesLoaded();
-    const fontBase64 = await loadJapaneseFontBase64();
+  await ensurePdfLibrariesLoaded();
+  const fontBase64 = await loadJapaneseFontBase64();
 
-    const { jsPDF } = window.jspdf;
-    doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
-    doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
-    doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
-    doc.setFont('NotoSansJP');
-  }catch(err){
-    console.error('PDF生成エラー:', err);
-    showToast('PDFの生成に失敗しました：' + (err && err.message ? err.message : 'unknown error'));
-    return;
-  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
+  doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
+  doc.setFont('NotoSansJP');
 
   const { matches, players } = statsForSelectedMatches(teamName, ids);
   const agg = aggregateFromPlayerList(players);
@@ -330,6 +323,181 @@ async function generatePdfOnline(teamName){
 
   doc.save('vsTOP_' + teamName + '_選択集計.pdf');
   showToast('PDFを生成しました');
+}
+
+/// PDF出力の入り口。オンラインならjsPDFで直接生成し、
+/// オフライン時・または生成に失敗した時はSafari等の印刷機能を使う方式に自動で切り替える。
+async function exportSelectedAggregatePdf(teamName){
+  const ids = state.selectedAggregateMatchIds || [];
+  if (ids.length===0){ showToast('試合を選択してください'); return; }
+
+  if (typeof navigator!=='undefined' && navigator.onLine===false){
+    showToast('オフラインのため、印刷機能でPDFを作成します');
+    printSelectedAggregateFallback(teamName);
+    return;
+  }
+  try{
+    await generatePdfOnline(teamName);
+  }catch(err){
+    console.error('オンラインPDF生成に失敗、印刷方式に切り替えます:', err);
+    showToast('オンラインでの生成に失敗したため、印刷機能に切り替えます（' + (err && err.message ? err.message : 'unknown error') + '）');
+    printSelectedAggregateFallback(teamName);
+  }
+}
+
+/// オフライン時・オンライン生成失敗時のフォールバック：ブラウザの印刷機能（→「PDFとして保存」）を使う方式。
+/// URLやヘッダー/フッターの非表示、横向き・余白の指定は端末の印刷設定に依存する。
+function printSelectedAggregateFallback(teamName){
+  const ids = state.selectedAggregateMatchIds || [];
+  if (ids.length===0){ showToast('試合を選択してください'); return; }
+  const { matches, players } = statsForSelectedMatches(teamName, ids);
+  const agg = aggregateFromPlayerList(players);
+
+  const pages = [];
+
+  const spikePlayers = players.filter(p=>p.spikeOverall.total>0)
+    .sort((a,b)=>(b.spikeOverall.decisionRate??-1)-(a.spikeOverall.decisionRate??-1));
+  const servePlayers = players.filter(p=>p.serve.total>0)
+    .sort((a,b)=>(b.serve.effectiveRate??-1)-(a.serve.effectiveRate??-1));
+  const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
+    .sort((a,b)=>(b.serveReceiveOverall.aPassRate??-1)-(a.serveReceiveOverall.aPassRate??-1));
+
+  pages.push(`
+    <h1>${esc(teamName)}　選択試合の集計</h1>
+    <p>対象試合数：${ids.length}件　出力日時：${new Date().toLocaleString('ja-JP')}</p>
+    <h2>チーム全体成績</h2>
+    <table>
+      <tr><td>スパイク決定率</td><td>${pct(agg.spikeRate)}</td></tr>
+      <tr><td>サーブ効果率</td><td>${pct(agg.serveRate)}</td></tr>
+      <tr><td>キャッチAパス率</td><td>${pct(agg.catchRate)}</td></tr>
+      <tr><td>ブロック</td><td>${agg.totalBlocks}</td></tr>
+      <tr><td>サーブミス</td><td>${agg.serveMiss}</td></tr>
+      <tr><td>スパイクミス</td><td>${agg.spikeMiss}</td></tr>
+      <tr><td>被ブロック数</td><td>${agg.spikeBlocked}</td></tr>
+      <tr><td>キャッチミス</td><td>${agg.catchMiss}</td></tr>
+    </table>
+    ${spikePlayers.length ? `
+    <h3>スパイク（総合・決定率順）</h3>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
+      ${spikePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>`).join('')}
+    </table>` : ''}
+    ${servePlayers.length ? `
+    <h3>サーブ（総合・効果率順）</h3>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>効果</th><th>ミス</th><th>効果率</th></tr>
+      ${servePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.serve.total}</td><td>${p.serve.decided}</td><td>${p.serve.effective}</td><td>${p.serve.miss}</td><td>${pct(p.serve.effectiveRate)}</td></tr>`).join('')}
+    </table>` : ''}
+    ${catchPlayers.length ? `
+    <h3>キャッチ（総合・Aパス率順）</h3>
+    <table>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+      ${catchPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
+        <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>`).join('')}
+    </table>` : ''}
+  `);
+
+  const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
+  const nameForIdIn = (m, id) => {
+    const ev = m.rallyLog.find(e=>e.playerId===id);
+    return ev ? ev.playerName : '(不明)';
+  };
+  for (let i=0; i<validMatches.length; i+=5){
+    const chunk = validMatches.slice(i, i+5);
+    let matchesPage = i===0 ? `<h2>試合ごとの記録</h2>` : `<h2>試合ごとの記録（続き）</h2>`;
+    chunk.forEach((m, idx)=>{
+      const side = sideForTeamInMatch(m, teamName);
+      const startingLineup = side==='home' ? m.homeStartingLineup : m.awayStartingLineup;
+      const scoreText = m.setScores.map(s=>s.home+'-'+s.away).join(' / ');
+      if (idx>0) matchesPage += `<hr style="border:none;border-top:1px solid #999;margin:10px 0;">`;
+      matchesPage += `<h3>${esc(m.homeTeamName)} vs ${esc(m.awayTeamName)}　${new Date(m.date).toLocaleDateString('ja-JP')}</h3>`;
+      matchesPage += `<p>スコア：${esc(scoreText)}</p>`;
+      matchesPage += `<p><strong>スタメン：</strong>${(startingLineup||[]).map(e=>`${e.position}:${esc(nameForIdIn(m,e.playerId))}`).join('　') || '記録なし'}</p>`;
+      matchesPage += (m.substitutedPlayerIds && m.substitutedPlayerIds.length)
+        ? `<p><strong>メンバーチェンジで出場した選手：</strong>${m.substitutedPlayerIds.map(id=>esc(nameForIdIn(m,id))).join('　')}</p>`
+        : `<p class="muted">メンバーチェンジなし</p>`;
+    });
+    pages.push(matchesPage);
+  }
+
+  const playersByNumber = players.slice().sort((a,b)=>a.player.number-b.player.number);
+  playersByNumber.forEach(p=>{
+    let ph = `<h2>${esc(p.player.name)}（#${p.player.number}）</h2>`;
+    ph += p.participationType
+      ? `<p>出場形態：${esc(p.participationType)}${p.participationType==='MC'?'（途中出場）':''}　出場セット数：${p.setsParticipated}</p>`
+      : `<p>出場セット数：${p.setsParticipated}</p>`;
+
+    if (p.spikeOverall.total>0){
+      ph += `<h3>スパイク（総合）</h3><table>
+        <tr><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
+        <tr><td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>
+      </table>`;
+      if (p.spikeByCombo && p.spikeByCombo.length){
+        ph += `<h3>スパイク（コンビ別）</h3><table>
+          <tr><th>コンビ</th><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
+          ${p.spikeByCombo.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.total}</td><td>${c.decided}</td><td>${c.miss}</td><td>${c.blocked}</td><td>${pct(c.decisionRate)}</td></tr>`).join('')}
+        </table>`;
+      }
+    }
+    if (p.serve.total>0){
+      ph += `<h3>サーブ（総合）</h3><table>
+        <tr><th>総数</th><th>決定</th><th>効果</th><th>ミス</th><th>効果率</th></tr>
+        <tr><td>${p.serve.total}</td><td>${p.serve.decided}</td><td>${p.serve.effective}</td><td>${p.serve.miss}</td><td>${pct(p.serve.effectiveRate)}</td></tr>
+      </table>`;
+      if (p.serveByType && p.serveByType.length){
+        ph += `<h3>サーブ（種類別）</h3><table>
+          <tr><th>種類</th><th>総数</th><th>決定</th><th>効果</th><th>ミス</th><th>効果率</th></tr>
+          ${p.serveByType.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.total}</td><td>${t.decided}</td><td>${t.effective}</td><td>${t.miss}</td><td>${pct(t.effectiveRate)}</td></tr>`).join('')}
+        </table>`;
+      }
+    }
+    if (p.serveReceiveOverall.total>0){
+      ph += `<h3>キャッチ（総合）</h3><table>
+        <tr><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+        <tr><td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>
+      </table>`;
+      if (p.serveReceiveByType && p.serveReceiveByType.length){
+        ph += `<h3>キャッチ（相手サーブ種類別）</h3><table>
+          <tr><th>相手サーブ種類</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+          ${p.serveReceiveByType.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.total}</td><td>${t.aPass}</td><td>${t.bPass}</td><td>${t.cPass}</td><td>${t.miss}</td><td>${pct(t.aPassRate)}</td></tr>`).join('')}
+        </table>`;
+      }
+    }
+    if (p.receiveOverall.total>0){
+      ph += `<h3>レシーブ（総合）</h3><table>
+        <tr><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+        <tr><td>${p.receiveOverall.total}</td><td>${p.receiveOverall.aPass}</td><td>${p.receiveOverall.bPass}</td><td>${p.receiveOverall.cPass}</td><td>${p.receiveOverall.miss}</td><td>${pct(p.receiveOverall.aPassRate)}</td></tr>
+      </table>`;
+      if (p.receiveByType && p.receiveByType.length){
+        ph += `<h3>レシーブ（相手攻撃種類別）</h3><table>
+          <tr><th>相手攻撃種類</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+          ${p.receiveByType.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.total}</td><td>${t.aPass}</td><td>${t.bPass}</td><td>${t.cPass}</td><td>${t.miss}</td><td>${pct(t.aPassRate)}</td></tr>`).join('')}
+        </table>`;
+      }
+    }
+    if (p.toss.total>0){
+      ph += `<h3>トス</h3><table>
+        <tr><th>本数</th><th>成功</th><th>失敗</th><th>ミス</th><th>成功率</th></tr>
+        <tr><td>${p.toss.total}</td><td>${p.toss.success}</td><td>${p.toss.failure}</td><td>${p.toss.miss}</td><td>${pct(p.toss.successRate)}</td></tr>
+      </table>`;
+    }
+    if (p.block.decided>0){
+      ph += `<h3>ブロック</h3><table>
+        <tr><th>決定本数</th><th>出場セット数</th><th>セットあたり</th></tr>
+        <tr><td>${p.block.decided}</td><td>${p.block.setsPlayed}</td><td>${num(p.block.perSet,2)}</td></tr>
+      </table>`;
+    }
+    pages.push(ph);
+  });
+
+  const html = pages.map((p,i)=>`<div style="${i===pages.length-1?'':'page-break-after:always;'}">${p}</div>`).join('');
+  const printArea = document.getElementById('print-area');
+  if (!printArea){ showToast('印刷用の領域が見つかりませんでした'); return; }
+  printArea.innerHTML = html;
+  showToast('印刷ダイアログで「用紙の向き：横」を選んでください（URLを消すには「ヘッダーとフッター」もオフに）');
+  window.print();
 }
 
 
