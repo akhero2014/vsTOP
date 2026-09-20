@@ -113,6 +113,23 @@ async function loadScriptWithFallback(urls){
   throw lastError || new Error('すべてのCDN候補からの読み込みに失敗しました');
 }
 
+/// jsPDFのプラグイン（autoTableなど）は jsPDF.prototype ではなく jsPDF.API に登録され、
+/// new jsPDF() でインスタンスを作った時に初めてそのインスタンスへコピーされる仕組みになっている。
+/// そのため .prototype.autoTable だけを見ると、正しく読み込めていても「失敗」と誤判定してしまう。
+/// .API・.prototype・実際に作ったインスタンスの3通りを確認することで正しく判定する。
+function hasAutoTableSupport(){
+  try{
+    const jsPDF = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDF) return false;
+    if (typeof jsPDF.prototype.autoTable === 'function') return true;
+    if (jsPDF.API && typeof jsPDF.API.autoTable === 'function') return true;
+    const probe = new jsPDF();
+    return typeof probe.autoTable === 'function';
+  }catch(e){
+    return false;
+  }
+}
+
 async function ensurePdfLibrariesLoaded(){
   if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
     await loadScriptWithFallback(PDF_JSPDF_URLS);
@@ -120,11 +137,10 @@ async function ensurePdfLibrariesLoaded(){
   if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
     throw new Error('jsPDFの読み込みに失敗しました（インターネット接続、または広告ブロッカー等の拡張機能をご確認ください）');
   }
-  const proto = window.jspdf.jsPDF.prototype;
-  if (typeof proto.autoTable !== 'function'){
+  if (!hasAutoTableSupport()){
     await loadScriptWithFallback(PDF_AUTOTABLE_URLS);
   }
-  if (typeof proto.autoTable !== 'function'){
+  if (!hasAutoTableSupport()){
     throw new Error('表組みライブラリ（autoTable）の読み込みに失敗しました');
   }
 }
