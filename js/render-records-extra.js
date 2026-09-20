@@ -126,29 +126,34 @@ function printSelectedAggregate(teamName){
       </table>`);
   }
 
-  // ページ2：試合ごとの記録（得点・スタメン・メンバーチェンジ）
-  let matchesPage = `<h2>試合ごとの記録</h2>`;
-  matches.forEach(m=>{
-    const side = sideForTeamInMatch(m, teamName);
-    if (!side) return;
-    const nameForId = (id) => {
-      const ev = m.rallyLog.find(e=>e.playerId===id);
-      return ev ? ev.playerName : '(不明)';
-    };
-    const startingLineup = side==='home' ? m.homeStartingLineup : m.awayStartingLineup;
-    const scoreText = m.setScores.map(s=>s.home+'-'+s.away).join(' / ');
+  // ページ2以降：試合ごとの記録（得点・スタメン・メンバーチェンジ）。1ページに5試合ずつ、試合間は線で区切る
+  const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
+  const nameForIdIn = (m, id) => {
+    const ev = m.rallyLog.find(e=>e.playerId===id);
+    return ev ? ev.playerName : '(不明)';
+  };
+  for (let i=0; i<validMatches.length; i+=5){
+    const chunk = validMatches.slice(i, i+5);
+    let matchesPage = i===0 ? `<h2>試合ごとの記録</h2>` : `<h2>試合ごとの記録（続き）</h2>`;
+    chunk.forEach((m, idx)=>{
+      const side = sideForTeamInMatch(m, teamName);
+      const startingLineup = side==='home' ? m.homeStartingLineup : m.awayStartingLineup;
+      const scoreText = m.setScores.map(s=>s.home+'-'+s.away).join(' / ');
 
-    matchesPage += `<h3>${esc(m.homeTeamName)} vs ${esc(m.awayTeamName)}　${new Date(m.date).toLocaleDateString('ja-JP')}</h3>`;
-    matchesPage += `<p>スコア：${esc(scoreText)}</p>`;
-    matchesPage += `<p><strong>スタメン：</strong>${(startingLineup||[]).map(e=>`${e.position}:${esc(nameForId(e.playerId))}`).join('　') || '記録なし'}</p>`;
-    matchesPage += (m.substitutedPlayerIds && m.substitutedPlayerIds.length)
-      ? `<p><strong>メンバーチェンジで出場した選手：</strong>${m.substitutedPlayerIds.map(id=>esc(nameForId(id))).join('　')}</p>`
-      : `<p class="muted">メンバーチェンジなし</p>`;
-  });
-  pages.push(matchesPage);
+      if (idx>0) matchesPage += `<hr style="border:none;border-top:1px solid #999;margin:10px 0;">`;
+      matchesPage += `<h3>${esc(m.homeTeamName)} vs ${esc(m.awayTeamName)}　${new Date(m.date).toLocaleDateString('ja-JP')}</h3>`;
+      matchesPage += `<p>スコア：${esc(scoreText)}</p>`;
+      matchesPage += `<p><strong>スタメン：</strong>${(startingLineup||[]).map(e=>`${e.position}:${esc(nameForIdIn(m,e.playerId))}`).join('　') || '記録なし'}</p>`;
+      matchesPage += (m.substitutedPlayerIds && m.substitutedPlayerIds.length)
+        ? `<p><strong>メンバーチェンジで出場した選手：</strong>${m.substitutedPlayerIds.map(id=>esc(nameForIdIn(m,id))).join('　')}</p>`
+        : `<p class="muted">メンバーチェンジなし</p>`;
+    });
+    pages.push(matchesPage);
+  }
 
-  // ページ3以降：選手ごとに1ページ（記録があるカテゴリのみ。スパイク/サーブ/キャッチは総合のみ）
-  players.forEach(p=>{
+  // ページ：選手ごとに1ページ（記録があるカテゴリのみ。スパイク/サーブ/キャッチは総合のみ）。背番号順に出力
+  const playersByNumber = players.slice().sort((a,b)=>a.player.number-b.player.number);
+  playersByNumber.forEach(p=>{
     let ph = `<h2>${esc(p.player.name)}（#${p.player.number}）</h2>`;
     if (p.participationType) ph += `<p>出場形態：${esc(p.participationType)}${p.participationType==='MC'?'（途中出場）':''}　出場セット数：${p.setsParticipated}</p>`;
     else ph += `<p>出場セット数：${p.setsParticipated}</p>`;
@@ -352,4 +357,3 @@ function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackType
   }
   return html;
 }
-
