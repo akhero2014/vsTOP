@@ -6,7 +6,7 @@
    CACHE_NAME のバージョン番号を必ず上げてください。
    そうしないと、古いキャッシュが使われ続けて更新が反映されません。 */
 
-const CACHE_NAME = 'vstop-cache-v2';
+const CACHE_NAME = 'vstop-cache-v3';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -52,8 +52,15 @@ self.addEventListener('activate', (event) => {
 
 // キャッシュ優先。キャッシュに無ければネットワークから取得し、取得できたものは
 // 次回のためにキャッシュへ保存しておく（同一オリジンのGETリクエストのみ対象）。
+//
+// 重要：他のドメイン（cdnjs.cloudflare.com やjsDelivrなど、PDF生成用ライブラリ・
+// 日本語フォントの取得先）へのリクエストにはここで一切介入しない。もし介入して
+// しまうと、内部のfetchが少しでも失敗した際に caches.match の結果（undefinedの
+// ことが多い）にフォールバックしてしまい、本来ブラウザが直接取得すれば成功して
+// いたはずの通信まで「読み込み失敗」に見えてしまう不具合が起きるため。
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return; // 他ドメインはブラウザに任せる
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
