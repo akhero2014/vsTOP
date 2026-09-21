@@ -154,6 +154,7 @@ function renderMatchDetail(teamName){
   if (tab==='team'){
     const agg = aggregateFromPlayerList(list);
     html += teamAggregateRowsHtml(agg, matchOpponentErrors(match, side));
+    html += lossOfPointBreakdownHtml(lossOfPointBreakdownForTeamEvents(match.rallyLog, side));
   } else if (tab==='players'){
     html += list.length ? statsRowsHtml(list) : '<p class="muted">この試合の記録がありません</p>';
   } else if (tab==='rankings'){

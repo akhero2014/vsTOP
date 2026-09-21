@@ -74,6 +74,7 @@ function renderSelectedAggregateTab(teamName){
     const { matches:selMatches, players } = statsForSelectedMatches(teamName, ids);
     const agg = aggregateFromPlayerList(players);
     let opponentErrors = 0;
+    const lossEvents = [];
     selMatches.forEach(m=>{
       const side = sideForTeamInMatch(m, teamName);
       if (side==='home'){
@@ -81,9 +82,11 @@ function renderSelectedAggregateTab(teamName){
           ? (state.trackOpponentStats ? opponentErrorsBenefiting('home') : state.opponentMistakePoints)
           : (m.homeOpponentErrors||0);
       }
+      if (side) m.rallyLog.forEach(e=>{ if (e.playType==='lossOfPoint' && e.team===side) lossEvents.push(e); });
     });
     html += `<h3 style="margin-top:16px;">選択した${ids.length}試合の集計（${esc(teamName)}）</h3>`;
-    html += teamRatesOnlyHtml(agg);
+    html += teamAggregateRowsHtml(agg, opponentErrors);
+    html += lossOfPointBreakdownHtml(lossOfPointBreakdownFromEvents(lossEvents));
     html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ 印刷機能を使ってPDFを作成します。印刷ダイアログで「用紙の向き：横」を選んでください。ヘッダー/フッター（URLなど）が入る場合は「詳細設定」でオフにできます（Safariの場合は元々表示されません）。</p>
     <button class="btn" style="width:100%;margin-bottom:12px;" onclick="printSelectedAggregate('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
     html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
@@ -110,6 +113,13 @@ function printSelectedAggregate(teamName){
   const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
     .sort((a,b)=>(b.serveReceiveOverall.aPassRate??-1)-(a.serveReceiveOverall.aPassRate??-1));
 
+  const lossEventsForPdf = [];
+  matches.forEach(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    if (side) m.rallyLog.forEach(e=>{ if (e.playType==='lossOfPoint' && e.team===side) lossEventsForPdf.push(e); });
+  });
+  const lossBreakdownForPdf = lossOfPointBreakdownFromEvents(lossEventsForPdf);
+
   pages.push(`
     <h1>${esc(teamName)}　選択試合の集計</h1>
     <p>対象試合数：${ids.length}件　出力日時：${new Date().toLocaleString('ja-JP')}</p>
@@ -124,6 +134,12 @@ function printSelectedAggregate(teamName){
       <tr><td>被ブロック数</td><td>${agg.spikeBlocked}</td></tr>
       <tr><td>キャッチミス</td><td>${agg.catchMiss}</td></tr>
     </table>
+    ${lossBreakdownForPdf.total>0 ? `
+    <h2>失点の内訳（${lossBreakdownForPdf.total}回）</h2>
+    <table>
+      <tr><th>反則</th><th>レシーブミス</th><th>連携ミス</th></tr>
+      <tr><td>${lossBreakdownForPdf.反則}</td><td>${lossBreakdownForPdf.レシーブミス}</td><td>${lossBreakdownForPdf.連携ミス.length}</td></tr>
+    </table>` : ''}
   `);
   if (spikePlayers.length){
     pages.push(`

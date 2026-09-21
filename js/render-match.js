@@ -385,7 +385,7 @@ function renderHistory(){
     return `
     <div class="history-row">
       <span class="team-chip" style="background:${e.team==='home'?'#3b82f6':'#9aa1ab'}"></span>
-      <span style="width:34px;">${esc(String(playerNumberDisplay(e)))}</span>
+      <span style="width:102px;">${esc(String(playerNumberDisplay(e)))}</span>
       <span style="width:64px;">${esc(PLAY_TYPES[e.playType].label)}</span>
       <span class="grow"></span>
       <span class="history-badge" style="background:${resultColorFor(e)}22;color:${resultColorFor(e)}">${esc(e.resultLabel)}</span>
