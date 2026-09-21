@@ -39,7 +39,9 @@ function positionCircleHtml(team, index){
   const rotation = team==='home' ? state.homeRotation : state.awayRotation;
   const players = currentPlayers(team);
   const player = players.find(p=>p.id===rotation[index]);
-  const isSelected = state.selectedTeam===team && player && state.selectedPlayerId===player.id;
+  const isSelected = player && (state.selectedPlayType==='lossOfPoint'
+    ? (team==='home' && state.selectedLossPlayerIds.includes(player.id))
+    : (state.selectedTeam===team && state.selectedPlayerId===player.id));
   const disabled = !player || (team==='away' && !state.trackOpponentStats);
   const setterCls = player && playerPositions(player).includes('S') ? 'setter' : '';
   const isServeReceiverHighlight = player && player.isServeReceiver && state.selectedPlayType==='serveReceive';
@@ -57,7 +59,9 @@ function positionCircleHtml(team, index){
 function liberoBadgeHtml(team, index, label){
   const l = liberos(team);
   const player = l[index];
-  const isSelected = state.selectedTeam===team && player && state.selectedPlayerId===player.id;
+  const isSelected = player && (state.selectedPlayType==='lossOfPoint'
+    ? (team==='home' && state.selectedLossPlayerIds.includes(player.id))
+    : (state.selectedTeam===team && state.selectedPlayerId===player.id));
   const disabled = !player || (team==='away' && !state.trackOpponentStats);
   const circStyle = player ? positionColorStyle(player) || 'background:#f59e0b;' : 'background:rgba(255,255,255,.25);';
   return `
@@ -73,6 +77,11 @@ function liberoBadgeHtml(team, index, label){
 function selectCourtPlayer(team, playerId){
   if (!playerId) return;
   if (team==='away' && !state.trackOpponentStats) return;
+  if (state.selectedPlayType==='lossOfPoint'){
+    if (team!=='home') return; // 失点は自チームのみが対象
+    toggleLossPlayer(playerId);
+    return;
+  }
   state.selectedTeam = team; state.selectedPlayerId = playerId;
   render();
 }
@@ -149,13 +158,18 @@ function renderRosterTab(){
       <button class="btn ${team==='home'?'primary':''}" onclick="state.rosterTeam='home'; render();">${esc(state.homeTeamName)}</button>
       <button class="btn ${team==='away'?'primary':''}" onclick="state.rosterTeam='away'; render();">${esc(state.awayTeamName)}</button>
     </div>
-    ${(team==='away' && disabledAway) ? '<p class="muted">相手チームのスタッツ記録がオフのため選択できません（メニューから変更できます）</p>' : players.map(p=>`
+    ${(team==='away' && disabledAway) ? '<p class="muted">相手チームのスタッツ記録がオフのため選択できません（メニューから変更できます）</p>' : players.map(p=>{
+      const isSelected = state.selectedPlayType==='lossOfPoint'
+        ? (team==='home' && state.selectedLossPlayerIds.includes(p.id))
+        : (state.selectedPlayerId===p.id && state.selectedTeam===team);
+      return `
       <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;
-        ${(state.selectedPlayerId===p.id && state.selectedTeam===team) ? 'background:var(--blue);color:#fff;' : ''}"
+        ${isSelected ? 'background:var(--blue);color:#fff;' : ''}"
         onclick="selectCourtPlayer('${team}','${p.id}')">
         <span>#${p.number} ${esc(p.name)}</span>
-        <span class="${(state.selectedPlayerId===p.id && state.selectedTeam===team)?'':'muted'}">${esc(positionsDisplayText(p))}</span>
-      </button>`).join('')}
+        <span class="${isSelected?'':'muted'}">${esc(positionsDisplayText(p))}</span>
+      </button>`;
+    }).join('')}
   </div>`;
 }
 
@@ -233,12 +247,12 @@ function pickOppAttack(v){ state.selectedOpponentAttackType = state.selectedOppo
 
 /// 失点記録の専用パネル：ミスをしたチーム→ジャンル→（反則なら）細分化→選手 の順に選ぶ
 function renderLossOfPointEntry(){
+  const visible = visiblePlayTypes();
   const team = 'home';
   const genre = state.selectedLossGenre;
   const detail = state.selectedLossDetail;
-  const players = currentPlayers(team);
   const multi = genre==='連携ミス';
-  const needsPlayer = genre==='レシーブミス' || genre==='連携ミス' || (genre==='反則' && detail && detail!=='その他');
+  const selectedPlayers = state.selectedLossPlayerIds.map(id=>findPlayer(id, team)).filter(Boolean);
 
   let body = `
     <div class="choice-title">失点のジャンル</div>
@@ -254,19 +268,29 @@ function renderLossOfPointEntry(){
     </div>`;
   }
 
-  if (genre && (needsPlayer || genre==='反則')){
-    body += `
-    <div class="choice-title">選手${multi?'（複数選択可）':''}${genre==='反則' && detail==='その他' ? '（任意。選ばなければチームのミス扱い）':''}</div>
-    <div class="choice-grid" style="margin-bottom:12px;">
-      ${players.map(p=>`<button class="choice-btn ${state.selectedLossPlayerIds.includes(p.id)?'active':''}" onclick="toggleLossPlayer('${p.id}')">#${p.number} ${esc(p.name)}</button>`).join('')}
-    </div>`;
-  }
-
   const can = canRecordLossOfPoint();
   body += `<button class="btn primary" style="width:100%;" ${can?'':'disabled'} onclick="recordLossOfPoint()">失点を記録する</button>`;
   body += `<button class="btn" style="width:100%;margin-top:8px;" onclick="selectPlayType(state.servingTeam==='home'?'serve':'serveReceive')">キャンセル</button>`;
 
-  return `<div class="card col gap16 scroll">${body}</div>`;
+  return `
+  <div class="card col gap16 scroll">
+    <div class="play-tabs">
+      ${visible.map(t=>`
+        <button class="play-tab ${state.selectedPlayType===t?'active':''}" onclick="selectPlayType('${t}'); render();">
+          <span class="ic">${PLAY_TYPES[t].icon}</span>${esc(PLAY_TYPES[t].label)}
+        </button>`).join('')}
+    </div>
+
+    <div class="selected-player-row">
+      ${selectedPlayers.length
+        ? selectedPlayers.map(p=>`<span style="margin-right:10px;"><strong>#${p.number} ${esc(p.name)}</strong></span>`).join('')
+        : `<span class="muted">選手を選択してください（コート図・選手一覧から）${genre==='反則' && detail==='その他' ? '　※未選択ならチームのミス扱い':''}</span>`}
+      <span class="grow"></span>
+      ${multi ? '<span class="muted" style="font-size:11px;">複数選択可</span>' : ''}
+    </div>
+
+    ${body}
+  </div>`;
 }
 
 function renderPlayEntry(){
