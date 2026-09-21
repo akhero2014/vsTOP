@@ -167,12 +167,9 @@ function renderMatchDetail(teamName){
 function renderTeamCareerTab(teamName){
   const list = careerDetailedStatsForTeamName(teamName);
   const agg = aggregateFromPlayerList(list);
-  const errors = careerOpponentErrorsForTeamName(teamName);
-  const lossBreakdown = careerLossOfPointBreakdownForTeamName(teamName);
   return `
     <h3>${esc(teamName)}　通算${totalRecordedMatchCountForTeamName(teamName)}試合</h3>
-    ${teamAggregateRowsHtml(agg, errors)}
-    ${lossOfPointBreakdownHtml(lossBreakdown)}
+    ${teamRatesOnlyHtml(agg)}
   `;
 }
 
@@ -234,4 +231,3 @@ function renderNameMergeList(teamName){
 /* ---- CSV出力（そのチーム名が関わった試合のみが対象） ---- */
 
 /* ---- 選択集計：自由に選んだ試合だけで通算成績を見る（今日の試合だけ、など） ---- */
-

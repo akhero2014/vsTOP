@@ -99,7 +99,8 @@ function participationLabel(startingLineup, substitutedIds, playerId){
 
 function playerDetailedStats(playerId, team){
   const player = findPlayer(playerId, team);
-  const events = state.rallyLog.filter(e=>e.team===team && e.playerId===playerId);
+  const events = state.rallyLog.filter(e=>e.team===team &&
+    (e.playerId===playerId || (e.playerIds && e.playerIds.includes(playerId))));
   const setsPlayed = new Set(events.map(e=>e.setNumber)).size;
   const result = computeDetailedStats(events, setsPlayed, player);
   const startingLineup = team==='home' ? state.homeStartingLineup : state.awayStartingLineup;
@@ -148,8 +149,18 @@ function detailedStatsForAllPlayersFromMatches(perMatchEventsList){
   for (const matchEvents of perMatchEventsList){
     const grouped = {};
     for (const e of matchEvents){
-      const name = state.playerNameAliases[e.playerName] || e.playerName;
-      (grouped[name] = grouped[name]||[]).push(e);
+      if (e.playType==='lossOfPoint' && e.playerNames && e.playerNames.length>1){
+        // 連携ミスなど複数選手が絡むイベントは、関与した選手全員の集計に加える
+        e.playerNames.forEach(rawName=>{
+          const name = state.playerNameAliases[rawName] || rawName;
+          (grouped[name] = grouped[name]||[]).push(e);
+        });
+      } else {
+        const rawName = e.playerName || (e.playerNames && e.playerNames[0]);
+        if (!rawName) continue; // 選手が紐づかないチームのミス等は個人集計の対象外
+        const name = state.playerNameAliases[rawName] || rawName;
+        (grouped[name] = grouped[name]||[]).push(e);
+      }
     }
     for (const name in grouped){
       byName[name] = (byName[name]||[]).concat(grouped[name]);
@@ -158,8 +169,16 @@ function detailedStatsForAllPlayersFromMatches(perMatchEventsList){
   }
   return Object.keys(byName).map(name=>{
     const events = byName[name];
-    const last = events[events.length-1];
-    const player = { id:last.playerId, number:last.playerNumber, name, position:'-' };
+    // id・背番号は、この選手名に対応する情報を持つイベントから解決する（複数選手イベントも考慮）
+    let id, number;
+    for (const e of events){
+      if (e.playerId){ id = e.playerId; number = e.playerNumber; break; }
+      if (e.playerNames){
+        const idx = e.playerNames.findIndex(n=>(state.playerNameAliases[n]||n)===name);
+        if (idx>=0){ id = e.playerIds[idx]; number = e.playerNumbers[idx]; break; }
+      }
+    }
+    const player = { id, number, name, position:'-' };
     return computeDetailedStats(events, sets[name], player);
   }).sort((a,b)=>a.player.name.localeCompare(b.player.name,'ja'));
 }

@@ -176,6 +176,16 @@ function teamAggregateRowsHtml(agg, opponentErrors){
   </div>`;
 }
 
+/// チーム通算（複数試合の集計）用：率で表示されるものだけに絞った簡易版
+function teamRatesOnlyHtml(agg){
+  return `
+  <div class="col gap8" style="margin-bottom:16px;">
+    <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(agg.catchRate)}</strong></div>
+  </div>`;
+}
+
 /// 失点の内訳（ジャンル別・反則は種類別まで、連携ミスは選手名も列挙）を表示する
 function lossOfPointBreakdownHtml(breakdown){
   if (!breakdown || breakdown.total===0) return '';
@@ -217,4 +227,3 @@ function renderStatsSheet(){
   `;
   return sheetShell('スタッツ（今の試合）', body, 'max-width:900px;');
 }
-

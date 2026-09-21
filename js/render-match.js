@@ -367,13 +367,24 @@ function scoreAfterEntry(idx){
   return state.rallyLog[idx-1].snapshot.setScore;
 }
 
+/// ラリー履歴の背番号欄の表示：通常は背番号、失点で選手未選択なら「チーム」、
+/// 複数選手（連携ミス）なら選択した選手の番号をすべて表示する
+function playerNumberDisplay(e){
+  if (e.playType==='lossOfPoint'){
+    if (!e.playerNumbers || e.playerNumbers.length===0) return 'チーム';
+    if (e.playerNumbers.length>1) return e.playerNumbers.join('・');
+    return e.playerNumbers[0];
+  }
+  return e.playerNumber;
+}
+
 function renderHistory(){
   const rows = state.rallyLog.map((e,idx)=>{
     const score = scoreAfterEntry(idx);
     return `
     <div class="history-row">
       <span class="team-chip" style="background:${e.team==='home'?'#3b82f6':'#9aa1ab'}"></span>
-      <span style="width:22px;">${e.playerNumber}</span>
+      <span style="width:34px;">${esc(String(playerNumberDisplay(e)))}</span>
       <span style="width:64px;">${esc(PLAY_TYPES[e.playType].label)}</span>
       <span class="grow"></span>
       <span class="history-badge" style="background:${resultColorFor(e)}22;color:${resultColorFor(e)}">${esc(e.resultLabel)}</span>
@@ -391,6 +402,7 @@ function renderHistory(){
 }
 
 function resultColorFor(e){
+  if (e.playType==='lossOfPoint') return '#ef4444';
   const r = PLAY_TYPES[e.playType].results.find(r=>r.label===e.resultLabel);
   return r ? r.color : '#9aa1ab';
 }

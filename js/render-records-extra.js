@@ -83,7 +83,7 @@ function renderSelectedAggregateTab(teamName){
       }
     });
     html += `<h3 style="margin-top:16px;">選択した${ids.length}試合の集計（${esc(teamName)}）</h3>`;
-    html += teamAggregateRowsHtml(agg, opponentErrors);
+    html += teamRatesOnlyHtml(agg);
     html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ 印刷機能を使ってPDFを作成します。印刷ダイアログで「用紙の向き：横」を選んでください。ヘッダー/フッター（URLなど）が入る場合は「詳細設定」でオフにできます（Safariの場合は元々表示されません）。</p>
     <button class="btn" style="width:100%;margin-bottom:12px;" onclick="printSelectedAggregate('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
     html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
@@ -247,6 +247,19 @@ function printSelectedAggregate(teamName){
         <tr><th>決定本数</th><th>出場セット数</th><th>セットあたり</th></tr>
         <tr><td>${p.block.decided}</td><td>${p.block.setsPlayed}</td><td>${num(p.block.perSet,2)}</td></tr>
       </table>`;
+    }
+    if (p.lossOfPoint && p.lossOfPoint.total>0){
+      ph += `<h3>失点</h3><table>
+        <tr><th>合計</th><th>反則</th><th>レシーブミス</th><th>連携ミス（関与）</th></tr>
+        <tr><td>${p.lossOfPoint.total}</td><td>${p.lossOfPoint.反則}</td><td>${p.lossOfPoint.レシーブミス}</td><td>${p.lossOfPoint.連携ミス}</td></tr>
+      </table>`;
+      const foulRows = LOSS_FOUL_DETAILS.filter(d=>p.lossOfPoint.foulByDetail && p.lossOfPoint.foulByDetail[d]>0);
+      if (foulRows.length){
+        ph += `<h3>反則の内訳</h3><table>
+          <tr>${foulRows.map(d=>`<th>${esc(d)}</th>`).join('')}</tr>
+          <tr>${foulRows.map(d=>`<td>${p.lossOfPoint.foulByDetail[d]}</td>`).join('')}</tr>
+        </table>`;
+      }
     }
     pages.push(ph);
   });
