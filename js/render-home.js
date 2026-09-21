@@ -13,9 +13,10 @@ function renderHome(){
       <div class="home-buttons-grid">
         <div class="home-col">
           ${paused ? `
-            <button class="home-btn home-btn-tall" onclick="state.screen='match'; render();">
+            <button class="home-btn" onclick="state.screen='match'; render();">
               <span class="ic">▶️</span>
               <span class="col"><span class="tt">試合を再開する</span><span class="st">一時停止中の記録を続ける</span></span>
+              <span class="chev">›</span>
             </button>
             <button class="home-btn home-btn-tall indigo" onclick="resetForNewGame(); state.screen='match'; render();">
               <span class="ic">➕</span>
