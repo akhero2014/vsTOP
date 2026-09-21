@@ -88,7 +88,7 @@ function selectPlayType(type){
   if (type==='attack') autoSelectFrontRowNonSetter(state.selectedTeam);
   if (type==='lossOfPoint'){
     state.selectedLossTeam = 'home';
-    state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = [];
+    state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = []; state.selectedLossIsTeamMistake = false;
   }
 }
 
@@ -348,7 +348,7 @@ function recordLossOfPoint(){
   state.isRallyInProgress = false;
   state.serveReceiveRecorded = false;
 
-  state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = [];
+  state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = []; state.selectedLossIsTeamMistake = false;
   selectPlayType(winner==='home' ? 'serve' : 'serveReceive');
   render();
 }
@@ -356,17 +356,34 @@ function recordLossOfPoint(){
 function pickLossGenre(genre){
   state.selectedLossGenre = genre;
   state.selectedLossDetail = null;
-  state.selectedLossPlayerIds = [];
+  // 複数選択できるジャンル（連携ミス）以外に切り替えた時、2人以上選ばれていたら先頭の1人だけ残す。
+  // 先に選手を選んでからジャンルを選ぶ流れにも対応できるよう、選択自体はできるだけ維持する。
+  if (genre!=='連携ミス' && state.selectedLossPlayerIds.length>1){
+    state.selectedLossPlayerIds = state.selectedLossPlayerIds.slice(0,1);
+  }
+  if (state.selectedLossPlayerIds.length>0) state.selectedLossIsTeamMistake = false;
   render();
 }
 function pickLossDetail(detail){
   state.selectedLossDetail = detail;
-  // その他を選んだ時は、デフォルトでプレイヤー未選択（チームのミス扱い）にする
-  state.selectedLossPlayerIds = [];
+  if (detail==='その他'){
+    // その他はデフォルトで「チーム」のミス扱いにしておく（選手を選べば個人に切り替わる）
+    state.selectedLossPlayerIds = [];
+    state.selectedLossIsTeamMistake = true;
+  } else {
+    state.selectedLossIsTeamMistake = false;
+  }
   render();
 }
-/// 連携ミスは複数選択、それ以外は1人だけ選べる（選び直すと入れ替わる）
+/// 選手に紐付けない「チームのミス」を明示的に選ぶ
+function selectLossTeamMistake(){
+  state.selectedLossPlayerIds = [];
+  state.selectedLossIsTeamMistake = true;
+  render();
+}
+/// 連携ミスは複数選択、それ以外は1人だけ選べる（選び直すと入れ替わる）。ジャンルを選ぶ前でも選手を選べる。
 function toggleLossPlayer(playerId){
+  state.selectedLossIsTeamMistake = false;
   const multi = state.selectedLossGenre==='連携ミス';
   if (multi){
     const idx = state.selectedLossPlayerIds.indexOf(playerId);

@@ -124,7 +124,7 @@ function defaultState(){
     selectedTeam:'home', selectedPlayerId:null, selectedPlayType:'serve',
     selectedResult:null, selectedCourse:null, selectedSubType:null, selectedCombo:null,
     selectedOpponentServeType:null, selectedOpponentAttackType:null,
-    selectedLossTeam:'home', selectedLossGenre:null, selectedLossDetail:null, selectedLossPlayerIds:[],
+    selectedLossTeam:'home', selectedLossGenre:null, selectedLossDetail:null, selectedLossPlayerIds:[], selectedLossIsTeamMistake:false,
     currentSet:1, setScores:[{home:0,away:0}], rallyLog:[],
     homeSetsWon:0, awaySetsWon:0, pendingSetResult:null,
     opponentMistakePoints:0, ownMistakePoints:0, lastManualOpponentServeType:null, substitutedPlayerIds:[],

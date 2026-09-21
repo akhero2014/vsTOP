@@ -10,46 +10,46 @@ function renderHome(){
       <div class="home-title">vsTOP</div>
       <p class="muted" style="margin-top:2px;">バレーボール スタッツ</p>
       ${state.myTeamName ? `<p class="muted">自チーム：${esc(state.myTeamName)}</p>` : ''}
-      <div class="home-buttons">
-        ${paused ? `
-          <button class="home-btn" onclick="state.screen='match'; render();">
-            <span class="ic">▶️</span>
-            <span class="col"><span class="tt">試合を再開する</span><span class="st">一時停止中の記録を続ける</span></span>
+      <div class="home-buttons-grid">
+        <div class="home-col">
+          ${paused ? `
+            <button class="home-btn home-btn-tall" onclick="state.screen='match'; render();">
+              <span class="ic">▶️</span>
+              <span class="col"><span class="tt">試合を再開する</span><span class="st">一時停止中の記録を続ける</span></span>
+            </button>
+            <button class="home-btn home-btn-tall indigo" onclick="resetForNewGame(); state.screen='match'; render();">
+              <span class="ic">➕</span>
+              <span class="col"><span class="tt">新しい試合を開始する</span><span class="st">今の記録は保存してリセットします</span></span>
+            </button>
+          ` : `
+            <button class="home-btn home-btn-tall" onclick="state.showingStartingLineup=true; state.screen='match'; render();">
+              <span class="ic">▶️</span>
+              <span class="col"><span class="tt">ゲーム開始</span><span class="st">試合の記録を始める</span></span>
+            </button>
+          `}
+          <button class="home-btn home-btn-tall green" onclick="openSheet('records')">
+            <span class="ic">📊</span>
+            <span class="col"><span class="tt">スタッツ記録を見る</span><span class="st">試合ごと・選手ごとの通算成績</span></span>
+          </button>
+        </div>
+        <div class="home-col">
+          <button class="home-btn orange" onclick="openSheet('gamePrep')">
+            <span class="ic">👥</span>
+            <span class="col"><span class="tt">ゲーム準備</span><span class="st">チーム名・選手を登録する</span></span>
             <span class="chev">›</span>
           </button>
-          <button class="home-btn indigo" onclick="resetForNewGame(); state.screen='match'; render();">
-            <span class="ic">➕</span>
-            <span class="col"><span class="tt">新しい試合を開始する</span><span class="st">今の記録は保存してリセットします</span></span>
+          <button class="home-btn" onclick="openSheet('settings')">
+            <span class="ic">⚙️</span>
+            <span class="col"><span class="tt">設定</span><span class="st">入力設定・カスタム項目の編集</span></span>
             <span class="chev">›</span>
           </button>
-        ` : `
-          <button class="home-btn" onclick="state.showingStartingLineup=true; state.screen='match'; render();">
-            <span class="ic">▶️</span>
-            <span class="col"><span class="tt">ゲーム開始</span><span class="st">試合の記録を始める</span></span>
+          ${backupHomeButtonHtml()}
+          <button class="home-btn" onclick="openSheet('pdfCleanup')">
+            <span class="ic">🧹</span>
+            <span class="col"><span class="tt">PDFのヘッダー/フッターを除去</span><span class="st">印刷で作ったPDFからURL等を削除</span></span>
             <span class="chev">›</span>
           </button>
-        `}
-        <button class="home-btn green" onclick="openSheet('records')">
-          <span class="ic">📊</span>
-          <span class="col"><span class="tt">スタッツ記録を見る</span><span class="st">試合ごと・選手ごとの通算成績</span></span>
-          <span class="chev">›</span>
-        </button>
-        <button class="home-btn orange" onclick="openSheet('gamePrep')">
-          <span class="ic">👥</span>
-          <span class="col"><span class="tt">ゲーム準備</span><span class="st">チーム名・選手を登録する</span></span>
-          <span class="chev">›</span>
-        </button>
-        <button class="home-btn" onclick="openSheet('settings')">
-          <span class="ic">⚙️</span>
-          <span class="col"><span class="tt">設定</span><span class="st">入力設定・カスタム項目の編集</span></span>
-          <span class="chev">›</span>
-        </button>
-        ${backupHomeButtonHtml()}
-        <button class="home-btn" onclick="openSheet('pdfCleanup')">
-          <span class="ic">🧹</span>
-          <span class="col"><span class="tt">PDFのヘッダー/フッターを除去</span><span class="st">印刷で作ったPDFからURL等を削除</span></span>
-          <span class="chev">›</span>
-        </button>
+        </div>
       </div>
     </div>
   </div>`;

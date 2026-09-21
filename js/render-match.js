@@ -253,6 +253,7 @@ function renderLossOfPointEntry(){
   const detail = state.selectedLossDetail;
   const multi = genre==='連携ミス';
   const selectedPlayers = state.selectedLossPlayerIds.map(id=>findPlayer(id, team)).filter(Boolean);
+  const isTeamMistake = state.selectedLossIsTeamMistake && selectedPlayers.length===0;
 
   let body = `
     <div class="choice-title">失点のジャンル</div>
@@ -284,10 +285,13 @@ function renderLossOfPointEntry(){
 
     <div class="selected-player-row">
       ${selectedPlayers.length
-        ? selectedPlayers.map(p=>`<span style="margin-right:10px;"><strong>#${p.number} ${esc(p.name)}</strong></span>`).join('')
-        : `<span class="muted">選手を選択してください（コート図・選手一覧から）${genre==='反則' && detail==='その他' ? '　※未選択ならチームのミス扱い':''}</span>`}
+        ? selectedPlayers.map(p=>`<div class="num">${p.number}</div><strong style="margin-right:10px;">${esc(p.name)}</strong>`).join('')
+        : isTeamMistake
+          ? `<strong>チーム</strong><span class="muted">（選手を紐付けない失点）</span>`
+          : `<span class="muted">選手を選択してください（コート図・選手一覧から）</span>`}
       <span class="grow"></span>
-      ${multi ? '<span class="muted" style="font-size:11px;">複数選択可</span>' : ''}
+      ${multi ? '<span class="muted" style="font-size:11px;margin-right:8px;">複数選択可</span>' : ''}
+      <button class="btn small ${isTeamMistake?'primary':''}" onclick="selectLossTeamMistake()">チーム</button>
     </div>
 
     ${body}
