@@ -54,6 +54,10 @@ const PLAY_TYPES = {
     ]},
 };
 const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block'];
+/// 失点のジャンル。連携ミスのみ複数選手を選択できる
+const LOSS_GENRES = ['反則','レシーブミス','連携ミス'];
+/// 反則の細分化。その他のみプレイヤー選択が任意（選ばなければチームのミス扱い）
+const LOSS_FOUL_DETAILS = ['ネットタッチ','オーバーネット','パッシング','ホールディング','ドリブル','ポジショナルフォルト','その他'];
 const COURSES = ['左','中央','右','バック左','バック中央','バック右'];
 const POSITIONS = ['OH','OP','MB','S','L','R'];
 const ATTACK_TYPES = ['強打','フェイント','ロール'];
@@ -119,6 +123,7 @@ function defaultState(){
     selectedTeam:'home', selectedPlayerId:null, selectedPlayType:'serve',
     selectedResult:null, selectedCourse:null, selectedSubType:null, selectedCombo:null,
     selectedOpponentServeType:null, selectedOpponentAttackType:null,
+    selectedLossTeam:'home', selectedLossGenre:null, selectedLossDetail:null, selectedLossPlayerIds:[],
     currentSet:1, setScores:[{home:0,away:0}], rallyLog:[],
     homeSetsWon:0, awaySetsWon:0, pendingSetResult:null,
     opponentMistakePoints:0, ownMistakePoints:0, lastManualOpponentServeType:null, substitutedPlayerIds:[],

@@ -18,13 +18,49 @@ function toggleSelectedAggregateMatch(id){
   render();
 }
 
+/// 期間で絞り込んだ結果、現在表示されている試合をまとめて選択状態にする
+function selectAllVisibleAggregateMatches(){
+  const teamName = state.recordsTeamName;
+  const dateFrom = state.aggregateDateFrom || '';
+  const dateTo = state.aggregateDateTo || '';
+  const visible = matchesInvolvingTeamName(teamName).filter(m=>{
+    const d = new Date(m.date).toISOString().slice(0,10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
+  state.selectedAggregateMatchIds = visible.map(m=>m.id);
+  render();
+}
+
 function renderSelectedAggregateTab(teamName){
   if (!state.selectedAggregateMatchIds) state.selectedAggregateMatchIds = [];
   const matches = matchesInvolvingTeamName(teamName);
   const ids = state.selectedAggregateMatchIds;
+  const dateFrom = state.aggregateDateFrom || '';
+  const dateTo = state.aggregateDateTo || '';
+
+  const visibleMatches = matches.filter(m=>{
+    const d = new Date(m.date).toISOString().slice(0,10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
 
   let html = `<p class="muted">集計したい試合を自由に選んでください（例：今日の試合だけ、特定の大会だけ、など）。</p>`;
-  html += matches.map(m=>{
+  html += `
+    <div class="row gap8" style="margin-bottom:8px;align-items:center;">
+      <span class="muted">期間で絞り込み：</span>
+      <input type="date" class="field" value="${esc(dateFrom)}" onchange="state.aggregateDateFrom=this.value; render();" style="max-width:150px;">
+      <span class="muted">〜</span>
+      <input type="date" class="field" value="${esc(dateTo)}" onchange="state.aggregateDateTo=this.value; render();" style="max-width:150px;">
+      ${(dateFrom||dateTo) ? `<button class="btn small" onclick="state.aggregateDateFrom=''; state.aggregateDateTo=''; render();">期間をクリア</button>` : ''}
+    </div>
+    <div class="row gap8" style="margin-bottom:12px;">
+      <button class="btn small" onclick="selectAllVisibleAggregateMatches()">表示中をすべて選択</button>
+      <button class="btn small danger" onclick="state.selectedAggregateMatchIds=[]; render();">選択をリセット</button>
+    </div>`;
+  html += visibleMatches.map(m=>{
     const label = m.id==='current' ? '進行中：'+m.homeTeamName+' vs '+m.awayTeamName
       : new Date(m.date).toLocaleDateString('ja-JP')+' '+m.homeTeamName+' vs '+m.awayTeamName;
     const checked = ids.includes(m.id);
@@ -32,7 +68,7 @@ function renderSelectedAggregateTab(teamName){
     <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
       <input type="checkbox" ${checked?'checked':''} onchange="toggleSelectedAggregateMatch('${m.id}')"> ${esc(label)}
     </label>`;
-  }).join('') || '<p class="muted">まだ試合記録がありません</p>';
+  }).join('') || '<p class="muted">この期間に該当する試合記録がありません</p>';
 
   if (ids.length>0){
     const { matches:selMatches, players } = statsForSelectedMatches(teamName, ids);
@@ -75,7 +111,10 @@ function renderSelectedAggregateTab(teamName){
      Cache APIに保存しておくことで2回目以降の生成を高速化する
 */
 
-const PDF_JP_FONT_URL = 'https://cdn.jsdelivr.net/gh/kongou-ae/font@master/NotoSansJP-Regular.ttf';
+const PDF_JP_FONT_URLS = [
+  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
+  'https://raw.githack.com/google/fonts/main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
+];
 const PDF_FONT_CACHE_NAME = 'vstop-pdf-font-cache-v1';
 const PDF_JSPDF_URLS = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
@@ -155,20 +194,17 @@ function arrayBufferToBase64(buffer){
   return btoa(binary);
 }
 
-/// 日本語フォントを取得してBase64化する。一度取得できたらCache APIに保存し、
-/// 次回以降はネットワークに再度アクセスしなくても済むようにする
-async function loadJapaneseFontBase64(){
-  if (window.__jpFontBase64) return window.__jpFontBase64;
-
+/// 1つのURLからフォントを取得し、サイズを検証する（小さすぎる＝壊れたファイルやLFSポインター疑い）
+async function fetchAndValidateFont(url){
   let response = null;
   if ('caches' in window){
     try{
       const cache = await caches.open(PDF_FONT_CACHE_NAME);
-      response = await cache.match(PDF_JP_FONT_URL);
+      response = await cache.match(url);
       if (!response){
-        const fetched = await fetch(PDF_JP_FONT_URL);
+        const fetched = await fetch(url);
         if (!fetched.ok) throw new Error('status ' + fetched.status);
-        await cache.put(PDF_JP_FONT_URL, fetched.clone());
+        await cache.put(url, fetched.clone());
         response = fetched;
       }
     }catch(e){
@@ -176,22 +212,39 @@ async function loadJapaneseFontBase64(){
     }
   }
   if (!response){
-    response = await fetch(PDF_JP_FONT_URL);
-    if (!response.ok) throw new Error('日本語フォントの取得に失敗しました（HTTPステータス ' + response.status + '）');
+    response = await fetch(url);
+    if (!response.ok) throw new Error('HTTPステータス ' + response.status);
   }
   const buffer = await response.arrayBuffer();
 
-  // Git LFS管理のファイルだと、実体ではなく数百バイトのポインター情報しか返ってこないことがある。
+  // 壊れたファイルやGit LFSポインターだと、実体ではなく数百バイト〜数KBの情報しか返ってこないことがある。
   // 本物のTTFなら通常1MBを大きく超えるため、極端に小さい場合はここで検知して分かりやすいエラーにする
-  if (buffer.byteLength < 100000){
+  if (buffer.byteLength < 500000){
     const text = new TextDecoder().decode(buffer.slice(0, 200));
-    console.error('日本語フォントの取得内容が異常に小さいです（' + buffer.byteLength + 'バイト）。内容の先頭：', text);
-    throw new Error('日本語フォントの取得に失敗しました（取得先が本物のフォントファイルではない可能性があります。サイズ：' + buffer.byteLength + 'バイト）');
+    console.warn('フォント取得内容が異常に小さいです（' + buffer.byteLength + 'バイト）：', url, text);
+    throw new Error('取得先が本物のフォントファイルではない可能性があります（サイズ：' + buffer.byteLength + 'バイト）');
   }
+  return buffer;
+}
 
-  const base64 = arrayBufferToBase64(buffer);
-  window.__jpFontBase64 = base64;
-  return base64;
+/// 日本語フォントを取得してBase64化する。一度取得できたらCache APIに保存し、
+/// 次回以降はネットワークに再度アクセスしなくても済むようにする。複数の取得先を順番に試す。
+async function loadJapaneseFontBase64(){
+  if (window.__jpFontBase64) return window.__jpFontBase64;
+
+  let lastError = null;
+  for (const url of PDF_JP_FONT_URLS){
+    try{
+      const buffer = await fetchAndValidateFont(url);
+      const base64 = arrayBufferToBase64(buffer);
+      window.__jpFontBase64 = base64;
+      return base64;
+    }catch(err){
+      console.warn('日本語フォントの取得に失敗、次の候補を試します:', url, err);
+      lastError = err;
+    }
+  }
+  throw new Error('日本語フォントの取得に失敗しました（' + (lastError ? lastError.message : 'unknown error') + '）');
 }
 
 /// 選択した試合の集計をPDFとして生成する（jsPDF+autoTableを使い、アプリが自分でPDFを組み立てる）。

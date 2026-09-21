@@ -344,3 +344,4 @@ function downloadBlob(blob, filename){
   URL.revokeObjectURL(url);
   showToast('ダウンロードしました：'+filename);
 }
+

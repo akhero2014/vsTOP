@@ -86,6 +86,10 @@ function selectPlayType(type){
   if (type==='receive' && state.trackOpponentStats) state.selectedOpponentAttackType = lastOpponentAttackType();
   if (type==='toss') autoSelectSetter();
   if (type==='attack') autoSelectFrontRowNonSetter(state.selectedTeam);
+  if (type==='lossOfPoint'){
+    state.selectedLossTeam = 'home';
+    state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = [];
+  }
 }
 
 /// キャッチ（サーブレシーブ）タブを開いた時、ゲーム準備で「レシーブ担当」に
@@ -176,6 +180,17 @@ function recordPlay(){
   if (state.pendingSetResult || !canRecord()) return;
   const player = findPlayer(state.selectedPlayerId, state.selectedTeam);
   if (!player) return;
+
+  // 出場形態（スタメンの位置S1〜S6、リベロはL1/L2）は、試合開始時点ではなく
+  // 「試合開始後、最初にプレーが記録された瞬間」のローテーションを正として記録する
+  // （開始直後に手動でローテーションを直した場合などにも正しく対応できるようにするため）
+  if (state.rallyLog.length===0 && (!state.homeStartingLineup || state.homeStartingLineup.length===0)){
+    state.homeStartingLineup = state.homeRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }))
+      .concat((state.homeLiberoSelection||[]).map((id,i)=> id ? { position:'L'+(i+1), playerId:id } : null).filter(Boolean));
+    state.awayStartingLineup = state.awayRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }))
+      .concat((state.awayLiberoSelection||[]).map((id,i)=> id ? { position:'L'+(i+1), playerId:id } : null).filter(Boolean));
+  }
+
   const resultOpt = PLAY_TYPES[state.selectedPlayType].results.find(r=>r.label===state.selectedResult);
   const outcome = resultOpt.outcome;
 
@@ -272,35 +287,82 @@ function returnToRallyPoint(n){
   render();
 }
 
-function adjustOpponentMistakePoints(delta){
-  if (state.pendingSetResult) { render(); return; }
-  if (delta>0){
-    for (let i=0;i<delta;i++){ state.opponentMistakePoints++; addPoint('home'); handleScoring('home'); }
-    // 通常の得点と同じ挙動にする：ラリー進行中フラグ等をリセットしてから遷移する
-    state.isRallyInProgress = false;
-    state.serveReceiveRecorded = false;
-    selectPlayType('serve');
+/// 失点（自チーム・相手チームどちらのミスも同じ仕組みで記録する）が記録できる状態かどうか
+function canRecordLossOfPoint(){
+  if (!state.selectedLossGenre) return false;
+  if (state.selectedLossGenre==='反則'){
+    if (!state.selectedLossDetail) return false;
+    if (state.selectedLossDetail!=='その他' && state.selectedLossPlayerIds.length!==1) return false;
+  } else if (state.selectedLossGenre==='レシーブミス'){
+    if (state.selectedLossPlayerIds.length!==1) return false;
+  } else if (state.selectedLossGenre==='連携ミス'){
+    if (state.selectedLossPlayerIds.length<1) return false;
+  }
+  return true;
+}
+
+/// 失点を記録する。selectedLossTeamが「ミスをしたチーム」、得点は相手チームに入る。
+/// ラリー履歴にも通常のプレーと同様に記録され、後から編集・取消もできる
+function recordLossOfPoint(){
+  if (state.pendingSetResult || !canRecordLossOfPoint()) return;
+  const team = state.selectedLossTeam;
+  const winner = team==='home' ? 'away' : 'home';
+  const players = currentPlayers(team);
+  const playerIds = state.selectedLossPlayerIds.slice();
+  const playerNames = playerIds.map(id=>{ const p = players.find(p=>p.id===id); return p ? p.name : '(不明)'; });
+  const playerNumbers = playerIds.map(id=>{ const p = players.find(p=>p.id===id); return p ? p.number : null; });
+  const detailLabel = state.selectedLossGenre==='反則' ? '反則：'+state.selectedLossDetail : state.selectedLossGenre;
+
+  const snapshot = {
+    setScore: Object.assign({}, state.setScores[state.setScores.length-1]),
+    homeRotation: state.homeRotation.slice(), awayRotation: state.awayRotation.slice(),
+    servingTeam: state.servingTeam, isRallyInProgress: state.isRallyInProgress, serveReceiveRecorded: state.serveReceiveRecorded,
+  };
+  const event = {
+    id: uid(), playType:'lossOfPoint', team, playerIds, playerNames, playerNumbers,
+    genre: state.selectedLossGenre, detail: state.selectedLossGenre==='反則' ? state.selectedLossDetail : null,
+    resultLabel: detailLabel, outcome:'opponent', setNumber: state.currentSet, snapshot,
+  };
+  // 単独の選手に紐づく場合は、既存の集計処理（playerId/playerName前提）と互換性を持たせておく
+  if (playerIds.length===1){
+    event.playerId = playerIds[0]; event.playerName = playerNames[0]; event.playerNumber = playerNumbers[0];
+  }
+  state.rallyLog.unshift(event);
+
+  addPoint(winner); handleScoring(winner);
+  state.isRallyInProgress = false;
+  state.serveReceiveRecorded = false;
+
+  state.selectedLossGenre = null; state.selectedLossDetail = null; state.selectedLossPlayerIds = [];
+  selectPlayType(winner==='home' ? 'serve' : 'serveReceive');
+  render();
+}
+
+function pickLossGenre(genre){
+  state.selectedLossGenre = genre;
+  state.selectedLossDetail = null;
+  state.selectedLossPlayerIds = [];
+  render();
+}
+function pickLossDetail(detail){
+  state.selectedLossDetail = detail;
+  // その他を選んだ時は、デフォルトでプレイヤー未選択（チームのミス扱い）にする
+  state.selectedLossPlayerIds = [];
+  render();
+}
+/// 連携ミスは複数選択、それ以外は1人だけ選べる（選び直すと入れ替わる）
+function toggleLossPlayer(playerId){
+  const multi = state.selectedLossGenre==='連携ミス';
+  if (multi){
+    const idx = state.selectedLossPlayerIds.indexOf(playerId);
+    if (idx>=0) state.selectedLossPlayerIds.splice(idx,1);
+    else state.selectedLossPlayerIds.push(playerId);
   } else {
-    const reduce = Math.min(-delta, state.opponentMistakePoints);
-    if (reduce>0){ state.opponentMistakePoints -= reduce; adjustScoreSilent('home', -reduce); }
+    state.selectedLossPlayerIds = state.selectedLossPlayerIds[0]===playerId ? [] : [playerId];
   }
   render();
 }
 
-/// 自チームのミスによる失点（原因を選手に紐付けずに記録したい場合の簡易カウンター）
-function adjustOwnMistakePoints(delta){
-  if (state.pendingSetResult) { render(); return; }
-  if (delta>0){
-    for (let i=0;i<delta;i++){ state.ownMistakePoints++; addPoint('away'); handleScoring('away'); }
-    state.isRallyInProgress = false;
-    state.serveReceiveRecorded = false;
-    selectPlayType(state.servingTeam==='home' ? 'serve' : 'serveReceive');
-  } else {
-    const reduce = Math.min(-delta, state.ownMistakePoints);
-    if (reduce>0){ state.ownMistakePoints -= reduce; adjustScoreSilent('away', -reduce); }
-  }
-  render();
-}
 
 function adjustScoreSilent(team, delta){
   const cur = state.setScores[state.setScores.length-1];

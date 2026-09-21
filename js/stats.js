@@ -70,9 +70,21 @@ function computeDetailedStats(events, setsPlayed, player){
   const blockStatsV = { decided: blocks.filter(e=>e.resultLabel==='決定').length, setsPlayed };
   blockStatsV.perSet = setsPlayed>0 ? blockStatsV.decided/setsPlayed : null;
 
+  const lossEvents = events.filter(e=>e.playType==='lossOfPoint');
+  const lossFouls = lossEvents.filter(e=>e.genre==='反則');
+  const lossFoulByDetail = {};
+  LOSS_FOUL_DETAILS.forEach(d=>{ lossFoulByDetail[d] = lossFouls.filter(e=>e.detail===d).length; });
+  const lossOfPointV = {
+    total: lossEvents.length,
+    反則: lossFouls.length,
+    foulByDetail: lossFoulByDetail,
+    レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
+    連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').length,
+  };
+
   return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
     serveReceiveOverall:srOverall, serveReceiveByType:srByType, receiveOverall:recOverall, receiveByType:recByType,
-    block:blockStatsV };
+    block:blockStatsV, lossOfPoint:lossOfPointV };
 }
 
 /* ---- 今の試合：選手・チーム ---- */
@@ -101,6 +113,24 @@ function teamDetailedStats(team){
   const events = state.rallyLog.filter(e=>e.team===team);
   const placeholder = { number:0, name: team==='home'?state.homeTeamName:state.awayTeamName };
   return computeDetailedStats(events, state.currentSet, placeholder);
+}
+
+/// チーム全体での失点の内訳（ジャンル別・反則は種類別まで、連携ミスは選手名も列挙）
+/// events は既に対象チーム側だけに絞り込み済みのものを渡す
+function lossOfPointBreakdownFromEvents(lossEvents){
+  const fouls = lossEvents.filter(e=>e.genre==='反則');
+  const foulByDetail = {};
+  LOSS_FOUL_DETAILS.forEach(d=>{ foulByDetail[d] = fouls.filter(e=>e.detail===d).length; });
+  return {
+    total: lossEvents.length,
+    反則: fouls.length,
+    foulByDetail,
+    レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
+    連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').map(e=>({ playerNames: e.playerNames||[] })),
+  };
+}
+function lossOfPointBreakdownForTeamEvents(events, team){
+  return lossOfPointBreakdownFromEvents(events.filter(e=>e.playType==='lossOfPoint' && e.team===team));
 }
 
 /* ---- 通算（過去の試合＋進行中の試合）：チーム指定に対応 ---- */
@@ -174,6 +204,16 @@ function eventsForTeamNameByMatch(teamName){
 }
 function careerDetailedStatsForTeamName(teamName){
   return detailedStatsForAllPlayersFromMatches(eventsForTeamNameByMatch(teamName));
+}
+/// 指定チーム名の全試合をまたいだ失点の内訳（team名ではなくhome/away側の判定が必要なため専用に集計する）
+function careerLossOfPointBreakdownForTeamName(teamName){
+  const lossEvents = [];
+  matchesInvolvingTeamName(teamName).forEach(m=>{
+    const side = sideForTeamInMatch(m, teamName);
+    if (!side) return;
+    m.rallyLog.forEach(e=>{ if (e.playType==='lossOfPoint' && e.team===side) lossEvents.push(e); });
+  });
+  return lossOfPointBreakdownFromEvents(lossEvents);
 }
 function allPlayerNamesForTeamName(teamName){
   const names = new Set();

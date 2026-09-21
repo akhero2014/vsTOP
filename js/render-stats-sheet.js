@@ -11,7 +11,7 @@ function statsRowsHtml(rows){
   <div class="stats-scroll">
     <table class="stats-table">
       <thead><tr><th>#</th><th class="name-cell">選手名</th>${hasParticipation?'<th>出場形態</th>':''}<th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th><th>スパイクミス</th><th>被ブロック数</th>
-        <th>サーブ本数</th><th>サーブ効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>キャッチミス</th><th>ブロック本数</th></tr></thead>
+        <th>サーブ本数</th><th>サーブ効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>キャッチミス</th><th>ブロック本数</th><th>失点</th></tr></thead>
       <tbody>
         ${rows.map((r,i)=>`<tr style="cursor:pointer;" onclick="openPlayerDetail(window.__statsRowsCache[${i}])">
           <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td>
@@ -21,6 +21,7 @@ function statsRowsHtml(rows){
           <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
           <td>${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td><td>${r.serveReceiveOverall.miss}</td>
           <td>${r.block.decided}</td>
+          <td>${r.lossOfPoint ? r.lossOfPoint.total : 0}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -131,6 +132,23 @@ function renderPlayerDetailOverlay(){
       ${statLine('セットあたりのブロック数', num(s.block.perSet,2))}
     `);
   }
+  if (s.lossOfPoint && s.lossOfPoint.total>0){
+    body += sectionHeadingHtml('失点');
+    body += statCard(`
+      ${statLine('合計', s.lossOfPoint.total)}
+      ${statLine('反則', s.lossOfPoint.反則)}
+      ${statLine('レシーブミス', s.lossOfPoint.レシーブミス)}
+      ${statLine('連携ミス', s.lossOfPoint.連携ミス)}
+    `);
+    if (s.lossOfPoint.反則>0){
+      body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">反則の内訳</div>`;
+      LOSS_FOUL_DETAILS.forEach(d=>{
+        if (s.lossOfPoint.foulByDetail[d]>0){
+          body += statCard(statLine(d, s.lossOfPoint.foulByDetail[d]));
+        }
+      });
+    }
+  }
   if (s.spikeOverall.total===0 && s.serve.total===0 && s.toss.total===0 && s.serveReceiveOverall.total===0 && s.receiveOverall.total===0 && s.block.decided===0){
     body += '<p class="muted">まだ記録がありません</p>';
   }
@@ -158,12 +176,32 @@ function teamAggregateRowsHtml(agg, opponentErrors){
   </div>`;
 }
 
+/// 失点の内訳（ジャンル別・反則は種類別まで、連携ミスは選手名も列挙）を表示する
+function lossOfPointBreakdownHtml(breakdown){
+  if (!breakdown || breakdown.total===0) return '';
+  let html = `<h3>失点の内訳（${breakdown.total}回）</h3><div class="col gap8" style="margin-bottom:16px;">`;
+  html += `<div class="row" style="justify-content:space-between;"><span class="muted">反則</span><strong>${breakdown.反則}</strong></div>`;
+  LOSS_FOUL_DETAILS.forEach(d=>{
+    if (breakdown.foulByDetail[d]>0){
+      html += `<div class="row" style="justify-content:space-between;padding-left:16px;"><span class="muted">　└ ${esc(d)}</span><strong>${breakdown.foulByDetail[d]}</strong></div>`;
+    }
+  });
+  html += `<div class="row" style="justify-content:space-between;"><span class="muted">レシーブミス</span><strong>${breakdown.レシーブミス}</strong></div>`;
+  html += `<div class="row" style="justify-content:space-between;"><span class="muted">連携ミス</span><strong>${breakdown.連携ミス.length}</strong></div>`;
+  breakdown.連携ミス.forEach(m=>{
+    html += `<div class="row" style="justify-content:space-between;padding-left:16px;"><span class="muted">　└ ${esc(m.playerNames.join('・')||'選手未選択')}</span></div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
 function renderStatsSheet(){
   const team = state.trackOpponentStats ? (state.statsTeam || 'home') : 'home';
   const rows = playerDetailedStatsList(team);
   const agg = aggregateFromPlayerList(rows);
   const opponentErrors = team==='home' ? (state.trackOpponentStats?opponentErrorsBenefiting('home'):state.opponentMistakePoints)
                                         : state.rallyLog.filter(e=>e.team==='home'&&e.outcome==='opponent').length;
+  const lossBreakdown = lossOfPointBreakdownForTeamEvents(state.rallyLog, team);
   const body = `
     <div class="row gap8" style="margin-bottom:12px;">
       <button class="btn ${team==='home'?'primary':''}" onclick="state.statsTeam='home'; render();">${esc(state.homeTeamName)}</button>
@@ -173,6 +211,7 @@ function renderStatsSheet(){
     </div>
     <h3>チームスタッツ</h3>
     ${teamAggregateRowsHtml(agg, opponentErrors)}
+    ${lossOfPointBreakdownHtml(lossBreakdown)}
     <h3>選手別スタッツ</h3>
     ${rows.length ? statsRowsHtml(rows) : '<p class="muted">まだ記録がありません</p>'}
   `;

@@ -168,9 +168,11 @@ function renderTeamCareerTab(teamName){
   const list = careerDetailedStatsForTeamName(teamName);
   const agg = aggregateFromPlayerList(list);
   const errors = careerOpponentErrorsForTeamName(teamName);
+  const lossBreakdown = careerLossOfPointBreakdownForTeamName(teamName);
   return `
     <h3>${esc(teamName)}　通算${totalRecordedMatchCountForTeamName(teamName)}試合</h3>
     ${teamAggregateRowsHtml(agg, errors)}
+    ${lossOfPointBreakdownHtml(lossBreakdown)}
   `;
 }
 

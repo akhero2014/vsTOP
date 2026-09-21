@@ -118,18 +118,7 @@ function renderCourt(){
     </div>
     <button class="btn" onclick="openSheet('substitution')">🔁 メンバーチェンジ</button>
     <button class="btn" ${state.rallyLog.length?'':'disabled'} onclick="undoLast()">↩️ 1つ戻る</button>
-
-    ${!state.trackOpponentStats ? `
-      <div class="opp-mistake-row">
-        <span class="grow">相手のミス：${state.opponentMistakePoints} 回</span>
-        <button onclick="adjustOpponentMistakePoints(-1)">➖</button>
-        <button onclick="adjustOpponentMistakePoints(1)">➕</button>
-      </div>` : ''}
-    <div class="opp-mistake-row own" style="background:rgba(239,68,68,.12);">
-      <span class="grow">自チームのミス：${state.ownMistakePoints} 回</span>
-      <button onclick="adjustOwnMistakePoints(-1)">➖</button>
-      <button onclick="adjustOwnMistakePoints(1)">➕</button>
-    </div>
+    <button class="btn" style="background:rgba(239,68,68,.12);border-color:#ef4444;color:#b91c1c;" onclick="selectPlayType('lossOfPoint')">📉 失点を記録</button>
   </div>`;
 }
 
@@ -236,7 +225,51 @@ function pickOppServe(v){
 
 function pickOppAttack(v){ state.selectedOpponentAttackType = state.selectedOpponentAttackType===v ? null : v; render(); }
 
+/// 失点記録の専用パネル：ミスをしたチーム→ジャンル→（反則なら）細分化→選手 の順に選ぶ
+function renderLossOfPointEntry(){
+  const team = state.selectedLossTeam;
+  const genre = state.selectedLossGenre;
+  const detail = state.selectedLossDetail;
+  const players = currentPlayers(team);
+  const multi = genre==='連携ミス';
+  const needsPlayer = genre==='レシーブミス' || genre==='連携ミス' || (genre==='反則' && detail && detail!=='その他');
+
+  let body = `
+    <div class="choice-title">ミスをしたチーム</div>
+    <div class="row gap8" style="margin-bottom:12px;">
+      <button class="btn ${team==='home'?'primary':''}" onclick="state.selectedLossTeam='home'; state.selectedLossPlayerIds=[]; render();">${esc(state.homeTeamName)}</button>
+      <button class="btn ${team==='away'?'primary':''}" onclick="state.selectedLossTeam='away'; state.selectedLossPlayerIds=[]; render();">${esc(state.awayTeamName)}</button>
+    </div>
+    <div class="choice-title">失点のジャンル</div>
+    <div class="choice-grid" style="margin-bottom:12px;">
+      ${LOSS_GENRES.map(g=>`<button class="choice-btn ${genre===g?'active':''}" onclick="pickLossGenre('${g}')">${esc(g)}</button>`).join('')}
+    </div>`;
+
+  if (genre==='反則'){
+    body += `
+    <div class="choice-title">反則の種類</div>
+    <div class="choice-grid" style="margin-bottom:12px;">
+      ${LOSS_FOUL_DETAILS.map(d=>`<button class="choice-btn ${detail===d?'active':''}" onclick="pickLossDetail('${d}')">${esc(d)}</button>`).join('')}
+    </div>`;
+  }
+
+  if (genre && (needsPlayer || genre==='反則')){
+    body += `
+    <div class="choice-title">選手${multi?'（複数選択可）':''}${genre==='反則' && detail==='その他' ? '（任意。選ばなければチームのミス扱い）':''}</div>
+    <div class="choice-grid" style="margin-bottom:12px;">
+      ${players.map(p=>`<button class="choice-btn ${state.selectedLossPlayerIds.includes(p.id)?'active':''}" onclick="toggleLossPlayer('${p.id}')">#${p.number} ${esc(p.name)}</button>`).join('')}
+    </div>`;
+  }
+
+  const can = canRecordLossOfPoint();
+  body += `<button class="btn primary" style="width:100%;" ${can?'':'disabled'} onclick="recordLossOfPoint()">失点を記録する</button>`;
+  body += `<button class="btn" style="width:100%;margin-top:8px;" onclick="selectPlayType(state.servingTeam==='home'?'serve':'serveReceive')">キャンセル</button>`;
+
+  return `<div class="card col gap16 scroll">${body}</div>`;
+}
+
 function renderPlayEntry(){
+  if (state.selectedPlayType==='lossOfPoint') return renderLossOfPointEntry();
   const visible = visiblePlayTypes();
   const pt = PLAY_TYPES[state.selectedPlayType];
   const player = state.selectedPlayerId ? findPlayer(state.selectedPlayerId, state.selectedTeam) : null;

@@ -65,11 +65,6 @@ function actuallyStartMatch(){
   }
   saveLastLineupForTeamName('home', state.homeTeamName);
   if (state.trackOpponentStats) saveLastLineupForTeamName('away', state.awayTeamName);
-  // 出場形態（スタメンの位置S1〜S6、リベロはL1/L2）の記録用に、開始時点のスタメンを控えておく
-  state.homeStartingLineup = state.homeRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }))
-    .concat((state.homeLiberoSelection||[]).map((id,i)=> id ? { position:'L'+(i+1), playerId:id } : null).filter(Boolean));
-  state.awayStartingLineup = state.awayRotation.map((id,i)=>({ position:'S'+(i+1), playerId:id }))
-    .concat((state.awayLiberoSelection||[]).map((id,i)=> id ? { position:'L'+(i+1), playerId:id } : null).filter(Boolean));
   state.showLiberoWarning = false;
   state.showingStartingLineup = false;
   // 自チームが最初にサーブする場合、P1の選手を自動でサーブ選手として選択しておく
