@@ -182,7 +182,7 @@ function renderRecentPlaysStrip(){
     <span class="muted" style="font-size:11px;align-self:center;">直近：</span>
     ${recent.map(e=>`
       <span class="history-badge" style="background:${resultColorFor(e)}22;color:${resultColorFor(e)};font-size:11px;">
-        ${e.team==='home'?'自':'相'}#${e.playerNumber} ${esc(PLAY_TYPES[e.playType].label)}・${esc(e.resultLabel)}
+        ${e.team==='home'?'自':'相'}#${esc(String(playerNumberDisplay(e)))} ${esc(PLAY_TYPES[e.playType].label)}・${esc(e.resultLabel)}
       </span>`).join('')}
   </div>`;
 }
@@ -274,6 +274,7 @@ function renderLossOfPointEntry(){
 
   return `
   <div class="card col gap16 scroll">
+    ${renderRecentPlaysStrip()}
     <div class="play-tabs">
       ${visible.map(t=>`
         <button class="play-tab ${state.selectedPlayType===t?'active':''}" onclick="selectPlayType('${t}'); render();">
