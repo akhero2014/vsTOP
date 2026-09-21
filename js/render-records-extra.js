@@ -84,18 +84,8 @@ function renderSelectedAggregateTab(teamName){
     });
     html += `<h3 style="margin-top:16px;">選択した${ids.length}試合の集計（${esc(teamName)}）</h3>`;
     html += teamAggregateRowsHtml(agg, opponentErrors);
-    html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ インターネットに接続されている場合は、URLの入らないきれいなPDFを直接生成します（初回はフォントの読み込みに時間がかかります）。オフラインの場合、または生成に失敗した場合は、自動的に印刷機能（→「PDFとして保存」）に切り替わります。</p>
-    <button class="btn" style="width:100%;margin-bottom:12px;" onclick="exportSelectedAggregatePdf('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
-
-    if (state.pdfFallbackPrompt && state.pdfFallbackPrompt.teamName===teamName){
-      html += `<div class="card" style="margin-bottom:12px;background:rgba(239,68,68,.08);">
-        <p>${esc(state.pdfFallbackPrompt.reason)}印刷機能でPDFを作成しますか？</p>
-        <div class="row gap8">
-          <button class="btn primary" onclick="confirmPdfFallback()">印刷機能で作成する</button>
-          <button class="btn" onclick="cancelPdfFallback()">キャンセル</button>
-        </div>
-      </div>`;
-    }
+    html += `<p class="muted" style="font-size:12px;background:rgba(59,130,246,.08);padding:8px;border-radius:8px;">ℹ️ 印刷機能を使ってPDFを作成します。印刷ダイアログで「用紙の向き：横」を選んでください。ヘッダー/フッター（URLなど）が入る場合は「詳細設定」でオフにできます（Safariの場合は元々表示されません）。</p>
+    <button class="btn" style="width:100%;margin-bottom:12px;" onclick="printSelectedAggregate('${teamName.replace(/'/g,"\\'")}')">🖨️ PDFを出力する</button>`;
     html += players.length ? statsRowsHtml(players) : '<p class="muted">選手の記録がありません</p>';
   } else {
     html += '<p class="muted" style="margin-top:12px;">試合を選択すると、ここに集計結果が表示されます。</p>';
@@ -103,362 +93,9 @@ function renderSelectedAggregateTab(teamName){
   return html;
 }
 
-/* ==================== PDF生成（オンライン限定：jsPDFと日本語フォントをCDNから取得） ====================
-   このPDF機能はブラウザの印刷機能を経由しないため、URL・日付などの余計な表示が入らず、
-   横向き・余白・ページ構成を完全にアプリ側で制御できる。その代わりインターネット接続が必須。
-   - jsPDF / jspdf-autotable 本体：cdnjsから読み込み（未読み込みの場合のみ）
-   - 日本語フォント（Noto Sans JP）：GitHub上のファイルをjsDelivr経由で取得し、
-     Cache APIに保存しておくことで2回目以降の生成を高速化する
-*/
-
-const PDF_JP_FONT_URLS = [
-  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
-  'https://raw.githack.com/google/fonts/main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
-];
-const PDF_FONT_CACHE_NAME = 'vstop-pdf-font-cache-v1';
-const PDF_JSPDF_URLS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
-  'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
-];
-const PDF_AUTOTABLE_URLS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js',
-  'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js',
-];
-
-function loadScriptOnce(src){
-  return new Promise((resolve, reject)=>{
-    if (document.querySelector('script[data-pdf-src="'+src+'"]')){ resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.setAttribute('data-pdf-src', src);
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('ライブラリの読み込みに失敗しました：'+src));
-    document.head.appendChild(s);
-  });
-}
-
-/// 複数のCDN候補を順番に試し、どれか1つでも読み込めれば成功とする
-async function loadScriptWithFallback(urls){
-  let lastError = null;
-  for (const url of urls){
-    try{
-      await loadScriptOnce(url);
-      return;
-    }catch(err){
-      console.warn('CDNからの読み込みに失敗、次の候補を試します:', url, err);
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('すべてのCDN候補からの読み込みに失敗しました');
-}
-
-/// jsPDFのプラグイン（autoTableなど）は jsPDF.prototype ではなく jsPDF.API に登録され、
-/// new jsPDF() でインスタンスを作った時に初めてそのインスタンスへコピーされる仕組みになっている。
-/// そのため .prototype.autoTable だけを見ると、正しく読み込めていても「失敗」と誤判定してしまう。
-/// .API・.prototype・実際に作ったインスタンスの3通りを確認することで正しく判定する。
-function hasAutoTableSupport(){
-  try{
-    const jsPDF = window.jspdf && window.jspdf.jsPDF;
-    if (!jsPDF) return false;
-    if (typeof jsPDF.prototype.autoTable === 'function') return true;
-    if (jsPDF.API && typeof jsPDF.API.autoTable === 'function') return true;
-    const probe = new jsPDF();
-    return typeof probe.autoTable === 'function';
-  }catch(e){
-    return false;
-  }
-}
-
-async function ensurePdfLibrariesLoaded(){
-  if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
-    await loadScriptWithFallback(PDF_JSPDF_URLS);
-  }
-  if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function'){
-    throw new Error('jsPDFの読み込みに失敗しました（インターネット接続、または広告ブロッカー等の拡張機能をご確認ください）');
-  }
-  if (!hasAutoTableSupport()){
-    await loadScriptWithFallback(PDF_AUTOTABLE_URLS);
-  }
-  if (!hasAutoTableSupport()){
-    throw new Error('表組みライブラリ（autoTable）の読み込みに失敗しました');
-  }
-}
-
-function arrayBufferToBase64(buffer){
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let i=0; i<bytes.length; i+=chunkSize){
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunkSize));
-  }
-  return btoa(binary);
-}
-
-/// 1つのURLからフォントを取得し、サイズを検証する（小さすぎる＝壊れたファイルやLFSポインター疑い）
-async function fetchAndValidateFont(url){
-  let response = null;
-  if ('caches' in window){
-    try{
-      const cache = await caches.open(PDF_FONT_CACHE_NAME);
-      response = await cache.match(url);
-      if (!response){
-        const fetched = await fetch(url);
-        if (!fetched.ok) throw new Error('status ' + fetched.status);
-        await cache.put(url, fetched.clone());
-        response = fetched;
-      }
-    }catch(e){
-      response = null; // キャッシュがダメでも下の直接fetchにフォールバックする
-    }
-  }
-  if (!response){
-    response = await fetch(url);
-    if (!response.ok) throw new Error('HTTPステータス ' + response.status);
-  }
-  const buffer = await response.arrayBuffer();
-
-  // 壊れたファイルやGit LFSポインターだと、実体ではなく数百バイト〜数KBの情報しか返ってこないことがある。
-  // 本物のTTFなら通常1MBを大きく超えるため、極端に小さい場合はここで検知して分かりやすいエラーにする
-  if (buffer.byteLength < 500000){
-    const text = new TextDecoder().decode(buffer.slice(0, 200));
-    console.warn('フォント取得内容が異常に小さいです（' + buffer.byteLength + 'バイト）：', url, text);
-    throw new Error('取得先が本物のフォントファイルではない可能性があります（サイズ：' + buffer.byteLength + 'バイト）');
-  }
-  return buffer;
-}
-
-/// 日本語フォントを取得してBase64化する。一度取得できたらCache APIに保存し、
-/// 次回以降はネットワークに再度アクセスしなくても済むようにする。複数の取得先を順番に試す。
-async function loadJapaneseFontBase64(){
-  if (window.__jpFontBase64) return window.__jpFontBase64;
-
-  let lastError = null;
-  for (const url of PDF_JP_FONT_URLS){
-    try{
-      const buffer = await fetchAndValidateFont(url);
-      const base64 = arrayBufferToBase64(buffer);
-      window.__jpFontBase64 = base64;
-      return base64;
-    }catch(err){
-      console.warn('日本語フォントの取得に失敗、次の候補を試します:', url, err);
-      lastError = err;
-    }
-  }
-  throw new Error('日本語フォントの取得に失敗しました（' + (lastError ? lastError.message : 'unknown error') + '）');
-}
-
-/// 選択した試合の集計をPDFとして生成する（jsPDF+autoTableを使い、アプリが自分でPDFを組み立てる）。
-/// 1ページ目：チーム全体成績＋スパイク/サーブ/キャッチ（総合・率の高い順）の選手別一覧
-/// 続くページ：試合ごとの記録（得点・スタメン・メンバーチェンジ、1ページ5試合・区切り線つき）
-/// さらに続くページ：選手ごとに1ページ（記録があるカテゴリのみ、背番号順）
-async function generatePdfOnline(teamName){
-  const ids = state.selectedAggregateMatchIds || [];
-  if (ids.length===0){ showToast('試合を選択してください'); return; }
-
-  showToast('PDFを生成しています…（初回はフォントの読み込みに時間がかかることがあります）');
-
-  await ensurePdfLibrariesLoaded();
-  const fontBase64 = await loadJapaneseFontBase64();
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
-  doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
-  doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
-  doc.setFont('NotoSansJP');
-
-  const { matches, players } = statsForSelectedMatches(teamName, ids);
-  const agg = aggregateFromPlayerList(players);
-  const tableStyle = { font:'NotoSansJP', fontSize:9 };
-  const headStyle = { font:'NotoSansJP', fontStyle:'normal', fillColor:[59,130,246] };
-  let firstSection = true;
-  const startNewSection = () => { if (!firstSection) doc.addPage(); firstSection = false; };
-
-  // ---- ページ1：チーム全体成績 ----
-  startNewSection();
-  doc.setFontSize(16);
-  doc.text(teamName + '　選択試合の集計', 10, 14);
-  doc.setFontSize(10);
-  doc.text('対象試合数：' + ids.length + '件　出力日時：' + new Date().toLocaleString('ja-JP'), 10, 20);
-  doc.autoTable({
-    startY: 26, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
-    head: [['項目', '値']],
-    body: [
-      ['スパイク決定率', pct(agg.spikeRate)],
-      ['サーブ効果率', pct(agg.serveRate)],
-      ['キャッチAパス率', pct(agg.catchRate)],
-      ['ブロック', String(agg.totalBlocks)],
-      ['サーブミス', String(agg.serveMiss)],
-      ['スパイクミス', String(agg.spikeMiss)],
-      ['被ブロック数', String(agg.spikeBlocked)],
-      ['キャッチミス', String(agg.catchMiss)],
-    ],
-  });
-
-  const spikePlayers = players.filter(p=>p.spikeOverall.total>0)
-    .sort((a,b)=>(b.spikeOverall.decisionRate??-1)-(a.spikeOverall.decisionRate??-1));
-  if (spikePlayers.length){
-    startNewSection();
-    doc.setFontSize(14);
-    doc.text('スパイク（総合・決定率順）', 10, 14);
-    doc.autoTable({
-      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
-      head: [['#','選手名','総数','決定','ミス','被ブロック','決定率']],
-      body: spikePlayers.map(p=>[p.player.number, p.player.name, p.spikeOverall.total, p.spikeOverall.decided, p.spikeOverall.miss, p.spikeOverall.blocked, pct(p.spikeOverall.decisionRate)]),
-    });
-  }
-  const servePlayers = players.filter(p=>p.serve.total>0)
-    .sort((a,b)=>(b.serve.effectiveRate??-1)-(a.serve.effectiveRate??-1));
-  if (servePlayers.length){
-    startNewSection();
-    doc.setFontSize(14);
-    doc.text('サーブ（総合・効果率順）', 10, 14);
-    doc.autoTable({
-      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
-      head: [['#','選手名','総数','決定','効果','ミス','効果率']],
-      body: servePlayers.map(p=>[p.player.number, p.player.name, p.serve.total, p.serve.decided, p.serve.effective, p.serve.miss, pct(p.serve.effectiveRate)]),
-    });
-  }
-  const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
-    .sort((a,b)=>(b.serveReceiveOverall.aPassRate??-1)-(a.serveReceiveOverall.aPassRate??-1));
-  if (catchPlayers.length){
-    startNewSection();
-    doc.setFontSize(14);
-    doc.text('キャッチ（総合・Aパス率順）', 10, 14);
-    doc.autoTable({
-      startY: 20, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle,
-      head: [['#','選手名','総数','Aパス','Bパス','Cパス','ミス','Aパス率']],
-      body: catchPlayers.map(p=>[p.player.number, p.player.name, p.serveReceiveOverall.total, p.serveReceiveOverall.aPass, p.serveReceiveOverall.bPass, p.serveReceiveOverall.cPass, p.serveReceiveOverall.miss, pct(p.serveReceiveOverall.aPassRate)]),
-    });
-  }
-
-  // ---- 試合ごとの記録（1ページ5試合、区切り線つき）----
-  const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
-  const nameForIdIn = (m, id) => {
-    const ev = m.rallyLog.find(e=>e.playerId===id);
-    return ev ? ev.playerName : '(不明)';
-  };
-  for (let i=0; i<validMatches.length; i+=5){
-    const chunk = validMatches.slice(i, i+5);
-    startNewSection();
-    doc.setFontSize(14);
-    doc.text(i===0 ? '試合ごとの記録' : '試合ごとの記録（続き）', 10, 14);
-    let y = 22;
-    chunk.forEach((m, idx)=>{
-      const side = sideForTeamInMatch(m, teamName);
-      const startingLineup = side==='home' ? m.homeStartingLineup : m.awayStartingLineup;
-      const scoreText = m.setScores.map(s=>s.home+'-'+s.away).join(' / ');
-      if (idx>0){ doc.setDrawColor(180); doc.line(10, y, 287, y); y += 6; }
-      doc.setFontSize(11);
-      doc.text(m.homeTeamName + ' vs ' + m.awayTeamName + '　' + new Date(m.date).toLocaleDateString('ja-JP'), 10, y); y += 6;
-      doc.setFontSize(9);
-      doc.text('スコア：' + scoreText, 10, y); y += 5;
-      const lineupText = (startingLineup||[]).map(e=>e.position+':'+nameForIdIn(m,e.playerId)).join('　') || '記録なし';
-      doc.text(doc.splitTextToSize('スタメン：' + lineupText, 270), 10, y); y += 5 + Math.max(0, doc.splitTextToSize('スタメン：' + lineupText, 270).length-1)*4;
-      const subText = (m.substitutedPlayerIds && m.substitutedPlayerIds.length)
-        ? 'メンバーチェンジで出場した選手：' + m.substitutedPlayerIds.map(id=>nameForIdIn(m,id)).join('　')
-        : 'メンバーチェンジなし';
-      doc.text(doc.splitTextToSize(subText, 270), 10, y); y += 8 + Math.max(0, doc.splitTextToSize(subText, 270).length-1)*4;
-    });
-  }
-
-  // ---- 選手ごとに1ページ（背番号順、記録があるカテゴリのみ）----
-  const playersByNumber = players.slice().sort((a,b)=>a.player.number-b.player.number);
-  playersByNumber.forEach(p=>{
-    startNewSection();
-    doc.setFontSize(14);
-    doc.text(p.player.name + '（#' + p.player.number + '）', 10, 14);
-    doc.setFontSize(9);
-    const participationText = p.participationType
-      ? '出場形態：' + p.participationType + (p.participationType==='MC' ? '（途中出場）' : '') + '　出場セット数：' + p.setsParticipated
-      : '出場セット数：' + p.setsParticipated;
-    doc.text(participationText, 10, 20);
-    let y = 26;
-
-    const section = (title, head, body) => {
-      doc.setFontSize(11);
-      doc.text(title, 10, y);
-      doc.autoTable({ startY:y+2, margin:{left:10,right:10}, styles: tableStyle, headStyles: headStyle, head:[head], body });
-      y = doc.lastAutoTable.finalY + 8;
-    };
-
-    if (p.spikeOverall.total>0){
-      section('スパイク（総合）', ['総数','決定','ミス','被ブロック','決定率'],
-        [[p.spikeOverall.total, p.spikeOverall.decided, p.spikeOverall.miss, p.spikeOverall.blocked, pct(p.spikeOverall.decisionRate)]]);
-      if (p.spikeByCombo && p.spikeByCombo.length){
-        section('スパイク（コンビ別）', ['コンビ','総数','決定','ミス','被ブロック','決定率'],
-          p.spikeByCombo.map(c=>[c.name, c.total, c.decided, c.miss, c.blocked, pct(c.decisionRate)]));
-      }
-    }
-    if (p.serve.total>0){
-      section('サーブ（総合）', ['総数','決定','効果','ミス','効果率'],
-        [[p.serve.total, p.serve.decided, p.serve.effective, p.serve.miss, pct(p.serve.effectiveRate)]]);
-      if (p.serveByType && p.serveByType.length){
-        section('サーブ（種類別）', ['種類','総数','決定','効果','ミス','効果率'],
-          p.serveByType.map(t=>[t.name, t.total, t.decided, t.effective, t.miss, pct(t.effectiveRate)]));
-      }
-    }
-    if (p.serveReceiveOverall.total>0){
-      section('キャッチ（総合）', ['総数','Aパス','Bパス','Cパス','ミス','Aパス率'],
-        [[p.serveReceiveOverall.total, p.serveReceiveOverall.aPass, p.serveReceiveOverall.bPass, p.serveReceiveOverall.cPass, p.serveReceiveOverall.miss, pct(p.serveReceiveOverall.aPassRate)]]);
-      if (p.serveReceiveByType && p.serveReceiveByType.length){
-        section('キャッチ（相手サーブ種類別）', ['相手サーブ種類','総数','Aパス','Bパス','Cパス','ミス','Aパス率'],
-          p.serveReceiveByType.map(t=>[t.name, t.total, t.aPass, t.bPass, t.cPass, t.miss, pct(t.aPassRate)]));
-      }
-    }
-    if (p.receiveOverall.total>0){
-      section('レシーブ（総合）', ['総数','Aパス','Bパス','Cパス','ミス','Aパス率'],
-        [[p.receiveOverall.total, p.receiveOverall.aPass, p.receiveOverall.bPass, p.receiveOverall.cPass, p.receiveOverall.miss, pct(p.receiveOverall.aPassRate)]]);
-      if (p.receiveByType && p.receiveByType.length){
-        section('レシーブ（相手攻撃種類別）', ['相手攻撃種類','総数','Aパス','Bパス','Cパス','ミス','Aパス率'],
-          p.receiveByType.map(t=>[t.name, t.total, t.aPass, t.bPass, t.cPass, t.miss, pct(t.aPassRate)]));
-      }
-    }
-    if (p.toss.total>0){
-      section('トス', ['本数','成功','失敗','ミス','成功率'],
-        [[p.toss.total, p.toss.success, p.toss.failure, p.toss.miss, pct(p.toss.successRate)]]);
-    }
-    if (p.block.decided>0){
-      section('ブロック', ['決定本数','出場セット数','セットあたり'],
-        [[p.block.decided, p.block.setsPlayed, num(p.block.perSet,2)]]);
-    }
-  });
-
-  doc.save('vsTOP_' + teamName + '_選択集計.pdf');
-  showToast('PDFを生成しました');
-}
-
-/// PDF出力の入り口。オンラインならjsPDFで直接生成し、
-/// オフライン時・または生成に失敗した時はSafari等の印刷機能を使う方式に自動で切り替える。
-async function exportSelectedAggregatePdf(teamName){
-  const ids = state.selectedAggregateMatchIds || [];
-  if (ids.length===0){ showToast('試合を選択してください'); return; }
-
-  if (typeof navigator!=='undefined' && navigator.onLine===false){
-    state.pdfFallbackPrompt = { teamName, reason: 'オフラインです。' };
-    render();
-    return;
-  }
-  try{
-    await generatePdfOnline(teamName);
-  }catch(err){
-    console.error('オンラインPDF生成に失敗:', err);
-    state.pdfFallbackPrompt = { teamName, reason: 'オンラインでの生成に失敗しました（' + (err && err.message ? err.message : 'unknown error') + '）。' };
-    render();
-  }
-}
-
-/// 失敗した/オフラインだった時に表示する確認：印刷機能で生成するか、ユーザーに選んでもらう
-function confirmPdfFallback(){
-  const p = state.pdfFallbackPrompt;
-  if (!p) return;
-  state.pdfFallbackPrompt = null;
-  printSelectedAggregateFallback(p.teamName);
-}
-function cancelPdfFallback(){ state.pdfFallbackPrompt = null; render(); }
-
-/// オフライン時・オンライン生成失敗時のフォールバック：ブラウザの印刷機能（→「PDFとして保存」）を使う方式。
+/// 選択した試合の集計を印刷（→「PDFとして保存」）できる形式で出力する。
 /// URLやヘッダー/フッターの非表示、横向き・余白の指定は端末の印刷設定に依存する。
-function printSelectedAggregateFallback(teamName){
+function printSelectedAggregate(teamName){
   const ids = state.selectedAggregateMatchIds || [];
   if (ids.length===0){ showToast('試合を選択してください'); return; }
   const { matches, players } = statsForSelectedMatches(teamName, ids);
@@ -517,23 +154,28 @@ function printSelectedAggregateFallback(teamName){
   }
 
   const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
-  const nameForIdIn = (m, id) => {
-    const ev = m.rallyLog.find(e=>e.playerId===id);
-    return ev ? ev.playerName : '(不明)';
-  };
   for (let i=0; i<validMatches.length; i+=5){
     const chunk = validMatches.slice(i, i+5);
     let matchesPage = i===0 ? `<h2>試合ごとの記録</h2>` : `<h2>試合ごとの記録（続き）</h2>`;
     chunk.forEach((m, idx)=>{
       const side = sideForTeamInMatch(m, teamName);
       const startingLineup = side==='home' ? m.homeStartingLineup : m.awayStartingLineup;
+      const startingIds = new Set((startingLineup||[]).map(e=>e.playerId));
+      const nameForIdInMatch = (id) => {
+        const ev = m.rallyLog.find(e=>e.playerId===id);
+        if (ev) return ev.playerName;
+        const p = findPlayer(id, side);
+        return p ? p.name : '(不明)';
+      };
       const scoreText = m.setScores.map(s=>s.home+'-'+s.away).join(' / ');
+      // メンバーチェンジで出場した選手：スタメンだった選手（出た側）は除き、実際に途中から入った選手だけを表示する
+      const subInIds = (m.substitutedPlayerIds||[]).filter(id=>!startingIds.has(id));
       if (idx>0) matchesPage += `<hr style="border:none;border-top:1px solid #999;margin:10px 0;">`;
       matchesPage += `<h3>${esc(m.homeTeamName)} vs ${esc(m.awayTeamName)}　${new Date(m.date).toLocaleDateString('ja-JP')}</h3>`;
       matchesPage += `<p>スコア：${esc(scoreText)}</p>`;
-      matchesPage += `<p><strong>スタメン：</strong>${(startingLineup||[]).map(e=>`${e.position}:${esc(nameForIdIn(m,e.playerId))}`).join('　') || '記録なし'}</p>`;
-      matchesPage += (m.substitutedPlayerIds && m.substitutedPlayerIds.length)
-        ? `<p><strong>メンバーチェンジで出場した選手：</strong>${m.substitutedPlayerIds.map(id=>esc(nameForIdIn(m,id))).join('　')}</p>`
+      matchesPage += `<p><strong>スタメン：</strong>${(startingLineup||[]).map(e=>`${e.position}:${esc(nameForIdInMatch(e.playerId))}`).join('　') || '記録なし'}</p>`;
+      matchesPage += subInIds.length
+        ? `<p><strong>メンバーチェンジで出場した選手：</strong>${subInIds.map(id=>esc(nameForIdInMatch(id))).join('　')}</p>`
         : `<p class="muted">メンバーチェンジなし</p>`;
     });
     pages.push(matchesPage);

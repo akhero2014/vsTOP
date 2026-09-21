@@ -293,7 +293,17 @@ function matchDetailedStatsForAllPlayers(match, team){
   results.forEach(r=>{
     r.participationType = participationLabel(startingLineup, match.substitutedPlayerIds, r.player.id);
   });
-  return results;
+  // プレーを一つも記録していない選手でも、スタメンだった場合は0件のまま一覧に加える
+  const existingIds = new Set(results.map(r=>r.player.id).filter(Boolean));
+  (startingLineup||[]).forEach(entry=>{
+    if (!entry.playerId || existingIds.has(entry.playerId)) return;
+    const p = findPlayer(entry.playerId, team);
+    const placeholder = computeDetailedStats([], 0, p || {id:entry.playerId, number:0, name:'(不明)'});
+    placeholder.participationType = entry.position;
+    results.push(placeholder);
+    existingIds.add(entry.playerId);
+  });
+  return results.sort((a,b)=>a.player.number-b.player.number);
 }
 function matchOpponentErrors(match, team){
   const opp = team==='home' ? 'away' : 'home';

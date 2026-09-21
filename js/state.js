@@ -52,8 +52,9 @@ const PLAY_TYPES = {
       {label:'決定', color:'#22c55e', outcome:'acting'},
       {label:'タッチ', color:'#10b981', outcome:'none'},
     ]},
+    lossOfPoint:  { label:'失点', icon:'📉', hasCourse:false, results:[] },
 };
-const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block'];
+const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block','lossOfPoint'];
 /// 失点のジャンル。連携ミスのみ複数選手を選択できる
 const LOSS_GENRES = ['反則','レシーブミス','連携ミス'];
 /// 反則の細分化。その他のみプレイヤー選択が任意（選ばなければチームのミス扱い）

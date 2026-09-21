@@ -287,7 +287,22 @@ function returnToRallyPoint(n){
   render();
 }
 
-/// 失点（自チーム・相手チームどちらのミスも同じ仕組みで記録する）が記録できる状態かどうか
+/// 相手チームのミスによる得点（従来通りの簡易カウンター運用）
+function adjustOpponentMistakePoints(delta){
+  if (state.pendingSetResult) { render(); return; }
+  if (delta>0){
+    for (let i=0;i<delta;i++){ state.opponentMistakePoints++; addPoint('home'); handleScoring('home'); }
+    state.isRallyInProgress = false;
+    state.serveReceiveRecorded = false;
+    selectPlayType('serve');
+  } else {
+    const reduce = Math.min(-delta, state.opponentMistakePoints);
+    if (reduce>0){ state.opponentMistakePoints -= reduce; adjustScoreSilent('home', -reduce); }
+  }
+  render();
+}
+
+/// 失点（自チームのミスを同じ仕組みで記録する）が記録できる状態かどうか
 function canRecordLossOfPoint(){
   if (!state.selectedLossGenre) return false;
   if (state.selectedLossGenre==='反則'){

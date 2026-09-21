@@ -4,6 +4,7 @@
 function renderActiveSheet(){
   switch(state.activeSheet){
     case 'settings': return renderSettingsSheet();
+    case 'pdfCleanup': return renderPdfCleanupSheet();
     case 'stats': return renderStatsSheet();
     case 'records': return renderRecordsSheet();
     case 'gamePrep': return renderGamePrepSheet();
@@ -225,6 +226,3 @@ function renderBackupSheet(){
 }
 
 /* ==================== メニュー ==================== */
-
-
-
