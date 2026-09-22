@@ -149,11 +149,24 @@ function renderMatchesTab(teamName){
       ${(dateFrom||dateTo||opponentFilterIds.length) ? `<button class="btn small" onclick="state.matchesDateFrom=''; state.matchesDateTo=''; state.matchesOpponentFilterIds=[]; render();">絞り込みをクリア</button>` : ''}
     </div>
     <div class="muted" style="margin-bottom:4px;">相手チームで絞り込み（複数選択可）</div>
-    <div class="choice-grid" style="margin-bottom:10px;">
-      ${knownOpponents.length ? knownOpponents.map(name=>`
-        <button class="choice-btn ${opponentFilterIds.includes(name)?'active':''}" onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}')">${esc(name)}</button>
-      `).join('') : '<p class="muted">対戦したことのある相手チームがまだありません</p>'}
-    </div>`;
+    <div class="row gap8" style="flex-wrap:wrap;margin-bottom:8px;">
+      ${opponentFilterIds.map(name=>`
+        <span class="opponent-chip">
+          ${esc(name)}
+          <button onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}')" aria-label="削除">✕</button>
+        </span>`).join('') || '<span class="muted" style="font-size:12px;">まだ選択されていません</span>'}
+    </div>
+    <input class="field" style="margin-bottom:6px;" placeholder="チーム名を検索して追加"
+      value="${esc(state.matchesOpponentSearch||'')}" oninput="state.matchesOpponentSearch=this.value; render();"
+      ${knownOpponents.length===0?'disabled':''}>
+    ${knownOpponents.length===0 ? '<p class="muted" style="font-size:12px;margin-bottom:10px;">対戦したことのある相手チームがまだありません</p>' : ''}
+    ${state.matchesOpponentSearch ? `
+      <div class="card" style="margin-bottom:10px;max-height:180px;overflow-y:auto;">
+        ${knownOpponents.filter(name=>name.includes(state.matchesOpponentSearch) && !opponentFilterIds.includes(name)).map(name=>`
+          <button class="btn" style="width:100%;text-align:left;margin-bottom:4px;"
+            onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}'); state.matchesOpponentSearch='';">${esc(name)}</button>
+        `).join('') || '<p class="muted" style="font-size:12px;">一致するチームがありません</p>'}
+      </div>` : ''}`;
   if (pastMatches.length===0){
     html += `<p class="muted">条件に一致する過去の試合記録がありません</p>`;
   } else {
