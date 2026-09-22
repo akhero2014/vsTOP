@@ -102,6 +102,15 @@ function findMatchById(id){
 function selectMatchForDetail(id){ state.selectedMatchForDetail=id; state.matchDetailTab='team'; render(); }
 function backToMatchList(){ state.selectedMatchForDetail=null; render(); }
 
+/// 過去の試合の絞り込み：相手チームを複数選択できるようにする
+function toggleMatchesOpponentFilter(name){
+  if (!state.matchesOpponentFilterIds) state.matchesOpponentFilterIds = [];
+  const idx = state.matchesOpponentFilterIds.indexOf(name);
+  if (idx>=0) state.matchesOpponentFilterIds.splice(idx,1);
+  else state.matchesOpponentFilterIds.push(name);
+  render();
+}
+
 function renderMatchesTab(teamName){
   if (state.selectedMatchForDetail) return renderMatchDetail(teamName);
 
@@ -109,17 +118,19 @@ function renderMatchesTab(teamName){
   const hasCurrent = matches.some(m=>m.id==='current');
   let pastMatches = matches.filter(m=>m.id!=='current');
 
+  // 実際に対戦したことがある相手チーム名の一覧（表記ゆれは統合済みの名前で）
+  const opponentNameFor = (m) => resolveTeamName(m.homeTeamName)===teamName
+    ? resolveTeamName(m.awayTeamName) : resolveTeamName(m.homeTeamName);
+  const knownOpponents = [...new Set(matches.filter(m=>m.id!=='current').map(opponentNameFor))].sort((a,b)=>a.localeCompare(b,'ja'));
+
   const dateFrom = state.matchesDateFrom || '';
   const dateTo = state.matchesDateTo || '';
-  const opponentFilter = (state.matchesOpponentFilter || '').trim();
+  const opponentFilterIds = state.matchesOpponentFilterIds || [];
   pastMatches = pastMatches.filter(m=>{
     const d = new Date(m.date).toISOString().slice(0,10);
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
-    if (opponentFilter){
-      const opponentName = resolveTeamName(m.homeTeamName)===teamName ? m.awayTeamName : m.homeTeamName;
-      if (!opponentName.includes(opponentFilter)) return false;
-    }
+    if (opponentFilterIds.length && !opponentFilterIds.includes(opponentNameFor(m))) return false;
     return true;
   });
 
@@ -135,11 +146,13 @@ function renderMatchesTab(teamName){
       <input type="date" class="field" value="${esc(dateFrom)}" onchange="state.matchesDateFrom=this.value; render();" style="max-width:150px;">
       <span class="muted">〜</span>
       <input type="date" class="field" value="${esc(dateTo)}" onchange="state.matchesDateTo=this.value; render();" style="max-width:150px;">
+      ${(dateFrom||dateTo||opponentFilterIds.length) ? `<button class="btn small" onclick="state.matchesDateFrom=''; state.matchesDateTo=''; state.matchesOpponentFilterIds=[]; render();">絞り込みをクリア</button>` : ''}
     </div>
-    <div class="row gap8" style="margin-bottom:10px;align-items:center;">
-      <span class="muted">相手チーム名：</span>
-      <input class="field grow" placeholder="部分一致で絞り込み" value="${esc(opponentFilter)}" oninput="state.matchesOpponentFilter=this.value; render();">
-      ${(dateFrom||dateTo||opponentFilter) ? `<button class="btn small" onclick="state.matchesDateFrom=''; state.matchesDateTo=''; state.matchesOpponentFilter=''; render();">絞り込みをクリア</button>` : ''}
+    <div class="muted" style="margin-bottom:4px;">相手チームで絞り込み（複数選択可）</div>
+    <div class="choice-grid" style="margin-bottom:10px;">
+      ${knownOpponents.length ? knownOpponents.map(name=>`
+        <button class="choice-btn ${opponentFilterIds.includes(name)?'active':''}" onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}')">${esc(name)}</button>
+      `).join('') : '<p class="muted">対戦したことのある相手チームがまだありません</p>'}
     </div>`;
   if (pastMatches.length===0){
     html += `<p class="muted">条件に一致する過去の試合記録がありません</p>`;
