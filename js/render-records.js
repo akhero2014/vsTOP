@@ -111,6 +111,42 @@ function toggleMatchesOpponentFilter(name){
   render();
 }
 
+function openMatchesOpponentPicker(){ state.showingOpponentPicker = true; state.matchesOpponentSearch=''; render(); }
+function closeMatchesOpponentPicker(){ state.showingOpponentPicker = false; render(); }
+
+/// 検索欄は入力のたびに再描画して候補を絞り込むが、通常のrender()だとinput要素が
+/// 作り直されてフォーカス・カーソル位置が失われ「1文字しか打てない」状態になってしまう。
+/// そのため、再描画のあとに同じ入力欄へフォーカスとカーソル位置を戻す。
+function updateMatchesOpponentSearch(value, cursorPos){
+  state.matchesOpponentSearch = value;
+  render();
+  const el = document.getElementById('opponentSearchInput');
+  if (el){
+    el.focus();
+    try{ el.setSelectionRange(cursorPos, cursorPos); }catch(e){}
+  }
+}
+
+function renderOpponentPickerOverlay(knownOpponents, opponentFilterIds){
+  const q = state.matchesOpponentSearch || '';
+  const candidates = knownOpponents.filter(name => !q || name.includes(q));
+  return `
+  <div class="overlay" onclick="if(event.target===this) closeMatchesOpponentPicker();">
+    <div class="sheet" style="max-width:420px;">
+      <div class="sheet-header"><h2>相手チームを選択</h2><button class="sheet-close" onclick="closeMatchesOpponentPicker()">閉じる</button></div>
+      <div class="sheet-body">
+        <input id="opponentSearchInput" class="field" style="margin-bottom:10px;" placeholder="チーム名を検索"
+          value="${esc(q)}" oninput="updateMatchesOpponentSearch(this.value, this.selectionStart)" autofocus>
+        ${candidates.length ? candidates.map(name=>`
+          <label class="row gap8" style="padding:8px 0;border-bottom:1px solid var(--line);">
+            <input type="checkbox" ${opponentFilterIds.includes(name)?'checked':''} onchange="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}')">
+            ${esc(name)}
+          </label>`).join('') : '<p class="muted">一致するチームがありません</p>'}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderMatchesTab(teamName){
   if (state.selectedMatchForDetail) return renderMatchDetail(teamName);
 
@@ -149,24 +185,16 @@ function renderMatchesTab(teamName){
       ${(dateFrom||dateTo||opponentFilterIds.length) ? `<button class="btn small" onclick="state.matchesDateFrom=''; state.matchesDateTo=''; state.matchesOpponentFilterIds=[]; render();">絞り込みをクリア</button>` : ''}
     </div>
     <div class="muted" style="margin-bottom:4px;">相手チームで絞り込み（複数選択可）</div>
-    <div class="row gap8" style="flex-wrap:wrap;margin-bottom:8px;">
+    <div class="row gap8" style="flex-wrap:wrap;margin-bottom:10px;align-items:center;">
       ${opponentFilterIds.map(name=>`
         <span class="opponent-chip">
           ${esc(name)}
           <button onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}')" aria-label="削除">✕</button>
-        </span>`).join('') || '<span class="muted" style="font-size:12px;">まだ選択されていません</span>'}
+        </span>`).join('')}
+      <button class="btn small" onclick="openMatchesOpponentPicker()" ${knownOpponents.length===0?'disabled':''}>＋ 追加</button>
     </div>
-    <input class="field" style="margin-bottom:6px;" placeholder="チーム名を検索して追加"
-      value="${esc(state.matchesOpponentSearch||'')}" oninput="state.matchesOpponentSearch=this.value; render();"
-      ${knownOpponents.length===0?'disabled':''}>
-    ${knownOpponents.length===0 ? '<p class="muted" style="font-size:12px;margin-bottom:10px;">対戦したことのある相手チームがまだありません</p>' : ''}
-    ${state.matchesOpponentSearch ? `
-      <div class="card" style="margin-bottom:10px;max-height:180px;overflow-y:auto;">
-        ${knownOpponents.filter(name=>name.includes(state.matchesOpponentSearch) && !opponentFilterIds.includes(name)).map(name=>`
-          <button class="btn" style="width:100%;text-align:left;margin-bottom:4px;"
-            onclick="toggleMatchesOpponentFilter('${esc(name).replace(/'/g,"\\'")}'); state.matchesOpponentSearch='';">${esc(name)}</button>
-        `).join('') || '<p class="muted" style="font-size:12px;">一致するチームがありません</p>'}
-      </div>` : ''}`;
+    ${knownOpponents.length===0 ? '<p class="muted" style="font-size:12px;margin-bottom:10px;">対戦したことのある相手チームがまだありません</p>' : ''}`;
+  if (state.showingOpponentPicker) html += renderOpponentPickerOverlay(knownOpponents, opponentFilterIds);
   if (pastMatches.length===0){
     html += `<p class="muted">条件に一致する過去の試合記録がありません</p>`;
   } else {
