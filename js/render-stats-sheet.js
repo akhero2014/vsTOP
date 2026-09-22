@@ -7,26 +7,45 @@
 function statsRowsHtml(rows){
   window.__statsRowsCache = rows;
   const hasParticipation = rows.some(r=>r.participationType!==undefined && r.participationType!==null);
+  const baseCols = hasParticipation ? 4 : 3; // #, 選手名, [出場形態], 出場セット数
   return `
   <div class="stats-scroll">
     <table class="stats-table">
-      <thead><tr><th>#</th><th class="name-cell">選手名</th>${hasParticipation?'<th>出場形態</th>':''}<th>出場セット数</th><th>スパイク本数</th><th>スパイク決定率</th><th>スパイクミス</th><th>被ブロック数</th>
-        <th>サーブ本数</th><th>サーブ効果率</th><th>サーブミス</th><th>キャッチ本数</th><th>キャッチAパス率</th><th>キャッチミス</th><th>ブロック本数</th><th>失点</th></tr></thead>
+      <thead>
+        <tr>
+          <th rowspan="2">#</th>
+          <th rowspan="2" class="name-cell">選手名</th>
+          ${hasParticipation?'<th rowspan="2">出場形態</th>':''}
+          <th rowspan="2">出場セット数</th>
+          <th colspan="4" class="cat-th cat-border">スパイク</th>
+          <th colspan="4" class="cat-th cat-border">サーブ</th>
+          <th colspan="3" class="cat-th cat-border">キャッチ</th>
+          <th colspan="1" class="cat-th cat-border">ブロック</th>
+          <th rowspan="2" class="cat-border">総失点</th>
+        </tr>
+        <tr>
+          <th class="cat-border">本数</th><th>決定率</th><th>ミス</th><th>被ブロック</th>
+          <th class="cat-border">本数</th><th>エース</th><th>効果率</th><th>ミス</th>
+          <th class="cat-border">本数</th><th>Aパス率</th><th>ミス</th>
+          <th class="cat-border">本数</th>
+        </tr>
+      </thead>
       <tbody>
         ${rows.map((r,i)=>`<tr style="cursor:pointer;" onclick="openPlayerDetail(window.__statsRowsCache[${i}])">
           <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td>
           ${hasParticipation?`<td>${esc(r.participationType||'-')}</td>`:''}
           <td>${r.setsParticipated}</td>
-          <td>${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td><td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
-          <td>${r.serve.total}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
-          <td>${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td><td>${r.serveReceiveOverall.miss}</td>
-          <td>${r.block.decided}</td>
-          <td>${r.lossOfPoint ? r.lossOfPoint.total : 0}</td>
+          <td class="cat-border">${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td><td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
+          <td class="cat-border">${r.serve.total}</td><td>${r.serve.decided}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
+          <td class="cat-border">${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td><td>${r.serveReceiveOverall.miss}</td>
+          <td class="cat-border">${r.block.decided}</td>
+          <td class="cat-border">${r.lossOfPoint ? r.lossOfPoint.totalLoss : 0}</td>
         </tr>`).join('')}
       </tbody>
     </table>
   </div>
-  ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、L1/L2はリベロ、MCは途中出場（メンバーチェンジ）</p>' : ''}`;
+  ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、L1/L2はリベロ、MCは途中出場（メンバーチェンジ）</p>' : ''}
+  <p class="muted" style="font-size:11px;margin-top:4px;">総失点：サーブミス・キャッチミス・スパイクミス・失点タブでの記録（反則/レシーブミス/連携ミス/その他）の合計</p>`;
 }
 
 /* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
@@ -132,13 +151,15 @@ function renderPlayerDetailOverlay(){
       ${statLine('セットあたりのブロック数', num(s.block.perSet,2))}
     `);
   }
-  if (s.lossOfPoint && s.lossOfPoint.total>0){
+  if (s.lossOfPoint && s.lossOfPoint.totalLoss>0){
     body += sectionHeadingHtml('失点');
     body += statCard(`
-      ${statLine('合計', s.lossOfPoint.total)}
+      ${statLine('失点タブでの記録合計', s.lossOfPoint.total)}
       ${statLine('反則', s.lossOfPoint.反則)}
       ${statLine('レシーブミス', s.lossOfPoint.レシーブミス)}
       ${statLine('連携ミス', s.lossOfPoint.連携ミス)}
+      ${statLine('その他', s.lossOfPoint.その他)}
+      ${statLine('総失点（サーブ/キャッチ/スパイクミス含む）', s.lossOfPoint.totalLoss)}
     `);
     if (s.lossOfPoint.反則>0){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">反則の内訳</div>`;
@@ -201,6 +222,9 @@ function lossOfPointBreakdownHtml(breakdown){
   breakdown.連携ミス.forEach(m=>{
     html += `<div class="row" style="justify-content:space-between;padding-left:16px;"><span class="muted">　└ ${esc(m.playerNames.join('・')||'選手未選択')}</span></div>`;
   });
+  if (breakdown.その他>0){
+    html += `<div class="row" style="justify-content:space-between;"><span class="muted">その他</span><strong>${breakdown.その他}</strong></div>`;
+  }
   html += `</div>`;
   return html;
 }

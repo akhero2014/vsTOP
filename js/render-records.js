@@ -107,7 +107,21 @@ function renderMatchesTab(teamName){
 
   const matches = matchesInvolvingTeamName(teamName);
   const hasCurrent = matches.some(m=>m.id==='current');
-  const pastMatches = matches.filter(m=>m.id!=='current');
+  let pastMatches = matches.filter(m=>m.id!=='current');
+
+  const dateFrom = state.matchesDateFrom || '';
+  const dateTo = state.matchesDateTo || '';
+  const opponentFilter = (state.matchesOpponentFilter || '').trim();
+  pastMatches = pastMatches.filter(m=>{
+    const d = new Date(m.date).toISOString().slice(0,10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    if (opponentFilter){
+      const opponentName = resolveTeamName(m.homeTeamName)===teamName ? m.awayTeamName : m.homeTeamName;
+      if (!opponentName.includes(opponentFilter)) return false;
+    }
+    return true;
+  });
 
   let html = '';
   if (hasCurrent){
@@ -115,8 +129,20 @@ function renderMatchesTab(teamName){
     html += matchRowHtml(currentAsMatchRecord(), false);
   }
   html += `<h3 style="margin:14px 0 6px;">過去の試合</h3>`;
+  html += `
+    <div class="row gap8" style="margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+      <span class="muted">期間：</span>
+      <input type="date" class="field" value="${esc(dateFrom)}" onchange="state.matchesDateFrom=this.value; render();" style="max-width:150px;">
+      <span class="muted">〜</span>
+      <input type="date" class="field" value="${esc(dateTo)}" onchange="state.matchesDateTo=this.value; render();" style="max-width:150px;">
+    </div>
+    <div class="row gap8" style="margin-bottom:10px;align-items:center;">
+      <span class="muted">相手チーム名：</span>
+      <input class="field grow" placeholder="部分一致で絞り込み" value="${esc(opponentFilter)}" oninput="state.matchesOpponentFilter=this.value; render();">
+      ${(dateFrom||dateTo||opponentFilter) ? `<button class="btn small" onclick="state.matchesDateFrom=''; state.matchesDateTo=''; state.matchesOpponentFilter=''; render();">絞り込みをクリア</button>` : ''}
+    </div>`;
   if (pastMatches.length===0){
-    html += `<p class="muted">「${esc(teamName)}」が関わった過去の試合記録がありません</p>`;
+    html += `<p class="muted">条件に一致する過去の試合記録がありません</p>`;
   } else {
     html += pastMatches.map(m=>matchRowHtml(m, true)).join('');
   }

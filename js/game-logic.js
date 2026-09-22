@@ -356,6 +356,13 @@ function recordLossOfPoint(){
 function pickLossGenre(genre){
   state.selectedLossGenre = genre;
   state.selectedLossDetail = null;
+  if (genre==='その他'){
+    // その他は常にチームの失点として扱う（選手には紐付けない）
+    state.selectedLossPlayerIds = [];
+    state.selectedLossIsTeamMistake = true;
+    render();
+    return;
+  }
   // 複数選択できるジャンル（連携ミス）以外に切り替えた時、2人以上選ばれていたら先頭の1人だけ残す。
   // 先に選手を選んでからジャンルを選ぶ流れにも対応できるよう、選択自体はできるだけ維持する。
   if (genre!=='連携ミス' && state.selectedLossPlayerIds.length>1){
@@ -383,6 +390,7 @@ function selectLossTeamMistake(){
 }
 /// 連携ミスは複数選択、それ以外は1人だけ選べる（選び直すと入れ替わる）。ジャンルを選ぶ前でも選手を選べる。
 function toggleLossPlayer(playerId){
+  if (state.selectedLossGenre==='その他') return; // その他は常にチームのミス（選手には紐付けない）
   state.selectedLossIsTeamMistake = false;
   const multi = state.selectedLossGenre==='連携ミス';
   if (multi){

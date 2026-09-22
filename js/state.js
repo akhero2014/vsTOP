@@ -56,7 +56,7 @@ const PLAY_TYPES = {
 };
 const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block','lossOfPoint'];
 /// 失点のジャンル。連携ミスのみ複数選手を選択できる
-const LOSS_GENRES = ['反則','レシーブミス','連携ミス'];
+const LOSS_GENRES = ['反則','レシーブミス','連携ミス','その他'];
 /// 反則の細分化。その他のみプレイヤー選択が任意（選ばなければチームのミス扱い）
 const LOSS_FOUL_DETAILS = ['ネットタッチ','オーバーネット','パッシング','ホールディング','ドリブル','ポジショナルフォルト','その他'];
 const COURSES = ['左','中央','右','バック左','バック中央','バック右'];

@@ -80,7 +80,11 @@ function computeDetailedStats(events, setsPlayed, player){
     foulByDetail: lossFoulByDetail,
     レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
     連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').length,
+    その他: lossEvents.filter(e=>e.genre==='その他').length,
   };
+  // 総失点：失点タブでの記録（反則/レシーブミス/連携ミス/その他）に加えて、
+  // サーブミス・キャッチミス・スパイクミスも合算した「この選手が絡んだ失点の合計」
+  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss;
 
   return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
     serveReceiveOverall:srOverall, serveReceiveByType:srByType, receiveOverall:recOverall, receiveByType:recByType,
@@ -128,6 +132,7 @@ function lossOfPointBreakdownFromEvents(lossEvents){
     foulByDetail,
     レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
     連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').map(e=>({ playerNames: e.playerNames||[] })),
+    その他: lossEvents.filter(e=>e.genre==='その他').length,
   };
 }
 function lossOfPointBreakdownForTeamEvents(events, team){
