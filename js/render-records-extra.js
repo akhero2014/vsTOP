@@ -111,7 +111,7 @@ function printSelectedAggregate(teamName){
   const servePlayers = players.filter(p=>p.serve.total>0)
     .sort((a,b)=>(b.serve.effectiveRate??-1)-(a.serve.effectiveRate??-1));
   const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
-    .sort((a,b)=>(b.serveReceiveOverall.aPassRate??-1)-(a.serveReceiveOverall.aPassRate??-1));
+    .sort((a,b)=>(b.serveReceiveOverall.successRate??-1)-(a.serveReceiveOverall.successRate??-1));
 
   const lossEventsForPdf = [];
   matches.forEach(m=>{
@@ -127,7 +127,7 @@ function printSelectedAggregate(teamName){
     <table>
       <tr><td>スパイク決定率</td><td>${pct(agg.spikeRate)}</td></tr>
       <tr><td>サーブ効果率</td><td>${pct(agg.serveRate)}</td></tr>
-      <tr><td>キャッチAパス率</td><td>${pct(agg.catchRate)}</td></tr>
+      <tr><td>キャッチ成功率</td><td>${pct(agg.catchRate)}</td></tr>
       <tr><td>ブロック</td><td>${agg.totalBlocks}</td></tr>
       <tr><td>サーブミス</td><td>${agg.serveMiss}</td></tr>
       <tr><td>スパイクミス</td><td>${agg.spikeMiss}</td></tr>
@@ -161,11 +161,11 @@ function printSelectedAggregate(teamName){
   }
   if (catchPlayers.length){
     pages.push(`
-    <h2>キャッチ（総合・Aパス率順）</h2>
+    <h2>キャッチ（総合・成功率順）</h2>
     <table>
-      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
+      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>成功率</th></tr>
       ${catchPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
-        <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>`).join('')}
+        <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.successRate)}</td></tr>`).join('')}
     </table>`);
   }
 
@@ -208,7 +208,7 @@ function printSelectedAggregate(teamName){
       ph += `<h3>スパイク（総合）</h3><table>
         <tr><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
         <tr><td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>
-      </table>`;
+      </table><p>セットあたりのアタック決定本数：${num(p.spikeOverall.perSet,2)}</p>`;
       if (p.spikeByCombo && p.spikeByCombo.length){
         ph += `<h3>スパイク（コンビ別）</h3><table>
           <tr><th>コンビ</th><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
@@ -230,13 +230,13 @@ function printSelectedAggregate(teamName){
     }
     if (p.serveReceiveOverall.total>0){
       ph += `<h3>キャッチ（総合）</h3><table>
-        <tr><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
-        <tr><td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.aPassRate)}</td></tr>
+        <tr><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>成功率</th></tr>
+        <tr><td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.successRate)}</td></tr>
       </table>`;
       if (p.serveReceiveByType && p.serveReceiveByType.length){
         ph += `<h3>キャッチ（相手サーブ種類別）</h3><table>
-          <tr><th>相手サーブ種類</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
-          ${p.serveReceiveByType.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.total}</td><td>${t.aPass}</td><td>${t.bPass}</td><td>${t.cPass}</td><td>${t.miss}</td><td>${pct(t.aPassRate)}</td></tr>`).join('')}
+          <tr><th>相手サーブ種類</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>成功率</th></tr>
+          ${p.serveReceiveByType.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.total}</td><td>${t.aPass}</td><td>${t.bPass}</td><td>${t.cPass}</td><td>${t.miss}</td><td>${pct(t.successRate)}</td></tr>`).join('')}
         </table>`;
       }
     }
@@ -245,6 +245,13 @@ function printSelectedAggregate(teamName){
         <tr><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
         <tr><td>${p.receiveOverall.total}</td><td>${p.receiveOverall.aPass}</td><td>${p.receiveOverall.bPass}</td><td>${p.receiveOverall.cPass}</td><td>${p.receiveOverall.miss}</td><td>${pct(p.receiveOverall.aPassRate)}</td></tr>
       </table>`;
+      if (p.receiveOverall.hardHit && p.receiveOverall.hardHit.total>0){
+        const h = p.receiveOverall.hardHit;
+        ph += `<h3>レシーブ（強打）</h3><table>
+          <tr><th>強打の総受数</th><th>成功数（A+B+C）</th><th>強打成功率</th></tr>
+          <tr><td>${h.total}</td><td>${h.success}</td><td>${pct(h.successRate)}</td></tr>
+        </table>`;
+      }
       if (p.receiveByType && p.receiveByType.length){
         ph += `<h3>レシーブ（相手攻撃種類別）</h3><table>
           <tr><th>相手攻撃種類</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>Aパス率</th></tr>
@@ -256,12 +263,18 @@ function printSelectedAggregate(teamName){
       ph += `<h3>トス</h3><table>
         <tr><th>本数</th><th>成功</th><th>失敗</th><th>ミス</th><th>成功率</th></tr>
         <tr><td>${p.toss.total}</td><td>${p.toss.success}</td><td>${p.toss.failure}</td><td>${p.toss.miss}</td><td>${pct(p.toss.successRate)}</td></tr>
-      </table>`;
+      </table><p>コンビ：${p.toss.combo}　2段トス：${p.toss.nidan}　相手コートへ返球：${p.toss.returned}</p>`;
+      if (p.toss.byDest && p.toss.byDest.length){
+        ph += `<h3>トス（あげ先別）</h3><table>
+          <tr><th>あげ先</th><th>コンビ</th><th>2段トス</th></tr>
+          ${p.toss.byDest.map(d=>`<tr><td>${esc(d.name)}</td><td>${d.combo}</td><td>${d.nidan}</td></tr>`).join('')}
+        </table>`;
+      }
     }
     if (p.block.decided>0){
       ph += `<h3>ブロック</h3><table>
-        <tr><th>決定本数</th><th>出場セット数</th><th>セットあたり</th></tr>
-        <tr><td>${p.block.decided}</td><td>${p.block.setsPlayed}</td><td>${num(p.block.perSet,2)}</td></tr>
+        <tr><th>決定本数</th><th>タッチ</th><th>ブロックアウト（失点）</th><th>出場セット数</th><th>セットあたり</th></tr>
+        <tr><td>${p.block.decided}</td><td>${p.block.touch}</td><td>${p.block.blockOut}</td><td>${p.block.setsPlayed}</td><td>${num(p.block.perSet,2)}</td></tr>
       </table>`;
     }
     if (p.lossOfPoint && p.lossOfPoint.total>0){
@@ -392,9 +405,9 @@ function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackType
     const rows = all.map(s=>{
       const target = state.catchScope==='総合' ? s.serveReceiveOverall : s.serveReceiveByType.find(c=>c.name===state.catchScope);
       if (!target || target.total===0) return null;
-      return rankingRow(s.player.name, target.aPassRate, pct(target.aPassRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
+      return rankingRow(s.player.name, target.successRate, pct(target.successRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
     }).filter(Boolean);
-    html += renderRankingList(rows, 'Aパス率');
+    html += renderRankingList(rows, '成功率');
   } else if (rt==='receive'){
     if (!state.receiveScope) state.receiveScope='総合';
     const scopes = ['総合', ...attackTypesScope];
@@ -416,3 +429,4 @@ function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackType
   }
   return html;
 }
+

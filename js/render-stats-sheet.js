@@ -26,7 +26,7 @@ function statsRowsHtml(rows){
         <tr>
           <th class="cat-border">本数</th><th>決定率</th><th>ミス</th><th>被ブロック</th>
           <th class="cat-border">本数</th><th>エース</th><th>効果率</th><th>ミス</th>
-          <th class="cat-border">本数</th><th>Aパス率</th><th>ミス</th>
+          <th class="cat-border">本数</th><th>成功率</th><th>ミス</th>
           <th class="cat-border">本数</th>
         </tr>
       </thead>
@@ -37,7 +37,7 @@ function statsRowsHtml(rows){
           <td>${r.setsParticipated}</td>
           <td class="cat-border">${r.spikeOverall.total}</td><td>${pct(r.spikeOverall.decisionRate)}</td><td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
           <td class="cat-border">${r.serve.total}</td><td>${r.serve.decided}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
-          <td class="cat-border">${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.aPassRate)}</td><td>${r.serveReceiveOverall.miss}</td>
+          <td class="cat-border">${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.successRate)}</td><td>${r.serveReceiveOverall.miss}</td>
           <td class="cat-border">${r.block.decided}</td>
           <td class="cat-border">${r.lossOfPoint ? r.lossOfPoint.totalLoss : 0}</td>
         </tr>`).join('')}
@@ -82,7 +82,7 @@ function spikeRowHtml(row){
     ${statLine('決定率', pct(row.decisionRate))}
   `);
 }
-function receiveRowHtml(row){
+function receiveRowHtml(row, isCatch){
   return statCard(`
     <div style="font-weight:700;margin-bottom:4px;">${esc(row.name)}</div>
     ${statLine('総数', row.total)}
@@ -90,7 +90,7 @@ function receiveRowHtml(row){
     ${statLine('Bパス', row.bPass)}
     ${statLine('Cパス', row.cPass)}
     ${statLine('ミス数', row.miss)}
-    ${statLine('Aパス率', pct(row.aPassRate))}
+    ${isCatch ? statLine('成功率', pct(row.successRate)) : statLine('Aパス率', pct(row.aPassRate))}
   `);
 }
 
@@ -105,6 +105,7 @@ function renderPlayerDetailOverlay(){
   if (s.spikeOverall.total>0){
     body += sectionHeadingHtml('スパイク');
     body += spikeRowHtml(s.spikeOverall);
+    body += statCard(statLine('セットあたりのアタック決定本数', num(s.spikeOverall.perSet,2)));
     if (s.spikeByCombo.length){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">コンビ別</div>`;
       s.spikeByCombo.forEach(c=>{ body += spikeRowHtml(c); });
@@ -126,29 +127,42 @@ function renderPlayerDetailOverlay(){
       ${statLine('失敗数', s.toss.failure)}
       ${statLine('ミス数', s.toss.miss)}
       ${statLine('成功率', pct(s.toss.successRate))}
+      ${statLine('コンビ', s.toss.combo)}
+      ${statLine('2段トス', s.toss.nidan)}
+      ${statLine('相手コートへ返球', s.toss.returned)}
     `);
+    if (s.toss.byDest && s.toss.byDest.length){
+      body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">あげ先別（コンビ / 2段トス）</div>`;
+      s.toss.byDest.forEach(d=>{ body += statCard(`<div style="font-weight:700;">${esc(d.name)}</div>${statLine('コンビ', d.combo)}${statLine('2段トス', d.nidan)}`); });
+    }
   }
   if (s.serveReceiveOverall.total>0){
     body += sectionHeadingHtml('キャッチ');
-    body += receiveRowHtml(s.serveReceiveOverall);
+    body += receiveRowHtml(s.serveReceiveOverall, true);
     if (s.serveReceiveByType.length){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">相手サーブ種類別</div>`;
-      s.serveReceiveByType.forEach(t=>{ body += receiveRowHtml(t); });
+      s.serveReceiveByType.forEach(t=>{ body += receiveRowHtml(t, true); });
     }
   }
   if (s.receiveOverall.total>0){
     body += sectionHeadingHtml('レシーブ');
     body += receiveRowHtml(s.receiveOverall);
+    if (s.receiveOverall.hardHit && s.receiveOverall.hardHit.total>0){
+      const h = s.receiveOverall.hardHit;
+      body += statCard(`<div style="font-weight:700;margin-bottom:4px;">強打</div>${statLine('強打の総受数', h.total)}${statLine('成功数（A+B+C）', h.success)}${statLine('強打成功率', pct(h.successRate))}`);
+    }
     if (s.receiveByType.length){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">相手攻撃種類別</div>`;
       s.receiveByType.forEach(t=>{ body += receiveRowHtml(t); });
     }
   }
-  if (s.block.decided>0 || s.block.setsPlayed>0){
+  if (s.block.decided>0 || s.block.touch>0 || s.block.blockOut>0 || s.block.setsPlayed>0){
     body += sectionHeadingHtml('ブロック');
     body += statCard(`
       ${statLine('決定本数', s.block.decided)}
       ${statLine('セットあたりのブロック数', num(s.block.perSet,2))}
+      ${statLine('タッチ', s.block.touch)}
+      ${statLine('ブロックアウト（失点）', s.block.blockOut)}
     `);
   }
   if (s.lossOfPoint && s.lossOfPoint.totalLoss>0){
@@ -187,7 +201,7 @@ function teamAggregateRowsHtml(agg, opponentErrors){
   <div class="col gap8" style="margin-bottom:16px;">
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
-    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(agg.catchRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチ成功率</span><strong>${pct(agg.catchRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">ブロック</span><strong>${agg.totalBlocks}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブミス</span><strong>${agg.serveMiss}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイクミス</span><strong>${agg.spikeMiss}</strong></div>
@@ -203,7 +217,7 @@ function teamRatesOnlyHtml(agg){
   <div class="col gap8" style="margin-bottom:16px;">
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
-    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチAパス率</span><strong>${pct(agg.catchRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">キャッチ成功率</span><strong>${pct(agg.catchRate)}</strong></div>
   </div>`;
 }
 
@@ -251,3 +265,4 @@ function renderStatsSheet(){
   `;
   return sheetShell('スタッツ（今の試合）', body, 'max-width:900px;');
 }
+

@@ -10,13 +10,13 @@ function csvEscape(text){
 function fmt(v, digits){ return v===null||v===undefined ? '' : v.toFixed(digits===undefined?1:digits); }
 
 function simpleStatsCSV(rows, filename){
-  const lines = ['#,選手名,出場セット数,スパイク本数,スパイク決定率(%),スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチAパス率(%),キャッチミス,ブロック本数'];
+  const lines = ['#,選手名,出場セット数,スパイク本数,スパイク決定率(%),スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチ成功率(%),キャッチミス,ブロック本数'];
   for (const r of rows){
     lines.push([
       r.player.number, csvEscape(r.player.name), r.setsParticipated,
       r.spikeOverall.total, fmt(r.spikeOverall.decisionRate), r.spikeOverall.miss, r.spikeOverall.blocked,
       r.serve.total, fmt(r.serve.effectiveRate), r.serve.miss,
-      r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.aPassRate), r.serveReceiveOverall.miss,
+      r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.successRate), r.serveReceiveOverall.miss,
       r.block.decided,
     ].join(','));
   }
@@ -209,8 +209,9 @@ function detailedMatchCSV(match, playerName, side){
 
   const attacks = events.filter(e=>e.playType==='attack');
   if (attacks.length){
-    out += '【スパイク（総合）】\n総数,決定本数,ミス数,決定率\n';
-    out += attacks.length+','+attacks.filter(e=>e.resultLabel==='決定').length+','+attacks.filter(e=>e.outcome==='opponent').length+',\n\n';
+    out += '【スパイク（総合）】\n総数,決定本数,ミス数,決定率,セット数,セットあたりの決定本数\n';
+    const atkSets = new Set(attacks.map(e=>e.setNumber)).size;
+    out += attacks.length+','+attacks.filter(e=>e.resultLabel==='決定').length+','+attacks.filter(e=>e.outcome==='opponent').length+',,'+atkSets+','+fmt(atkSets>0?attacks.filter(e=>e.resultLabel==='決定').length/atkSets:null,2)+'\n\n';
     const combos = [...new Set(attacks.map(e=>e.combo).filter(Boolean))].sort();
     if (combos.length){
       out += '【スパイク（コンビ別）】\nコンビ,総数,決定本数,ミス数,決定率\n';
@@ -228,16 +229,22 @@ function detailedMatchCSV(match, playerName, side){
   }
   const tosses = events.filter(e=>e.playType==='toss');
   if (tosses.length){
-    out += '【トス】\nトス本数,成功数,失敗数,ミス数,成功率\n';
-    out += tosses.length+','+tosses.filter(e=>e.resultLabel==='成功').length+','+tosses.filter(e=>e.resultLabel==='失敗').length+','+tosses.filter(e=>e.resultLabel==='ミス').length+',\n\n';
+    out += '【トス】\nトス本数,成功数,失敗数,ミス数,成功率,コンビ,2段トス,相手コートへ返球\n';
+    out += tosses.length+','+tosses.filter(e=>e.resultLabel==='成功').length+','+tosses.filter(e=>e.resultLabel==='失敗').length+','+tosses.filter(e=>e.resultLabel==='ミス').length+',,'+tosses.filter(e=>e.subType!=='2段トス').length+','+tosses.filter(e=>e.subType==='2段トス').length+','+tosses.filter(e=>e.returnedToOpponent===true).length+'\n\n';
+    const dests = [...new Set(tosses.map(e=>e.combo).filter(Boolean))].sort();
+    if (dests.length){
+      out += '【トス（あげ先別）】\nあげ先,コンビ,2段トス\n';
+      dests.forEach(d=>{ out += csvEscape(d)+','+tosses.filter(e=>e.combo===d && e.subType!=='2段トス').length+','+tosses.filter(e=>e.combo===d && e.subType==='2段トス').length+'\n'; });
+      out += '\n';
+    }
   }
   const srs = events.filter(e=>e.playType==='serveReceive');
   if (srs.length){
-    out += '【キャッチ（総合）】\n総数,Aパス数,Bパス数,Cパス数,Aパス率\n';
+    out += '【キャッチ（総合）】\n総数,Aパス数,Bパス数,Cパス数,成功率\n';
     out += srs.length+','+srs.filter(e=>e.resultLabel==='Aパス').length+','+srs.filter(e=>e.resultLabel==='Bパス').length+','+srs.filter(e=>e.resultLabel==='Cパス').length+',\n\n';
     const types = [...new Set(srs.map(e=>e.opponentServeType).filter(Boolean))].sort();
     if (types.length){
-      out += '【キャッチ（相手サーブ種類別）】\n相手サーブ種類,総数,Aパス数,Bパス数,Cパス数,Aパス率\n';
+      out += '【キャッチ（相手サーブ種類別）】\n相手サーブ種類,総数,Aパス数,Bパス数,Cパス数,成功率\n';
       types.forEach(t=>{
         const g = srs.filter(e=>e.opponentServeType===t);
         out += csvEscape(t)+','+g.length+','+g.filter(e=>e.resultLabel==='Aパス').length+','+g.filter(e=>e.resultLabel==='Bパス').length+','+g.filter(e=>e.resultLabel==='Cパス').length+',\n';
@@ -249,6 +256,11 @@ function detailedMatchCSV(match, playerName, side){
   if (recs.length){
     out += '【レシーブ（総合）】\n総数,Aパス数,Bパス数,Cパス数,Aパス率\n';
     out += recs.length+','+recs.filter(e=>e.resultLabel==='Aパス').length+','+recs.filter(e=>e.resultLabel==='Bパス').length+','+recs.filter(e=>e.resultLabel==='Cパス').length+',\n\n';
+    const hard = recs.filter(e=>e.opponentAttackType==='強打');
+    if (hard.length){
+      out += '【レシーブ（強打）】\n強打の総受数,強打のA+B+Cパス数,強打成功率\n';
+      out += hard.length+','+hard.filter(e=>['Aパス','Bパス','Cパス'].includes(e.resultLabel)).length+',\n\n';
+    }
     const types = [...new Set(recs.map(e=>e.opponentAttackType).filter(Boolean))].sort();
     if (types.length){
       out += '【レシーブ（相手攻撃種類別）】\n相手攻撃種類,総数,Aパス数,Bパス数,Cパス数,Aパス率\n';
@@ -261,8 +273,8 @@ function detailedMatchCSV(match, playerName, side){
   }
   const blocks = events.filter(e=>e.playType==='block');
   if (blocks.length){
-    out += '【ブロック】\nブロック決定本数,セットあたりのブロック数\n';
-    out += blocks.filter(e=>e.resultLabel==='決定').length+',\n\n';
+    out += '【ブロック】\nブロック決定本数,タッチ,ブロックアウト（失点）,セットあたりのブロック数\n';
+    out += blocks.filter(e=>e.resultLabel==='決定').length+','+blocks.filter(e=>e.resultLabel==='タッチ').length+','+blocks.filter(e=>e.resultLabel==='ブロックアウト').length+',\n\n';
   }
   return out;
 }
@@ -298,7 +310,7 @@ function buildPlayerCsvForMatches(matches, name, teamName){
     if (section){ matchNum++; body += '【第'+matchNum+'試合】\n'+section; }
   });
   if (!body) return null;
-  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\n';
+  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\nキャッチ成功率,"((Aパス数×100)+(Bパス数×50))÷総受数"\nレシーブ強打成功率,"(強打のAパス数+Bパス数+Cパス数)÷強打の総受数"\nセットあたりのアタック決定本数,"スパイク決定本数÷出場セット数"\n';
   return body;
 }
 

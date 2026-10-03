@@ -7,7 +7,8 @@ function spikeStats(events, name){
   const decided = events.filter(e=>e.resultLabel==='決定').length;
   const miss = events.filter(e=>e.resultLabel==='ミス').length;
   const blocked = events.filter(e=>e.resultLabel==='相手ブロック').length;
-  return { name, total, decided, miss, blocked, decisionRate: total>0 ? decided/total*100 : null };
+  return { name, total, decided, miss, blocked, decisionRate: total>0 ? decided/total*100 : null,
+    perSet: null };
 }
 
 function receiveStats(events, name){
@@ -16,7 +17,9 @@ function receiveStats(events, name){
   const bPass = events.filter(e=>e.resultLabel==='Bパス').length;
   const cPass = events.filter(e=>e.resultLabel==='Cパス').length;
   const miss = events.filter(e=>e.resultLabel==='ミス').length;
-  return { name, total, aPass, bPass, cPass, miss, aPassRate: total>0 ? aPass/total*100 : null };
+  return { name, total, aPass, bPass, cPass, miss, aPassRate: total>0 ? aPass/total*100 : null,
+    // 成功率＝（Aパス×100＋Bパス×50）÷総受数
+    successRate: total>0 ? (aPass*100 + bPass*50)/total : null };
 }
 
 /// サーブの種類別（ジャンプ/フローター等）の内訳を計算する
@@ -32,6 +35,8 @@ function serveTypeStats(events, name){
 function computeDetailedStats(events, setsPlayed, player){
   const attacks = events.filter(e=>e.playType==='attack');
   const spikeOverall = spikeStats(attacks, '総合');
+  // セットあたりのアタック決定本数
+  spikeOverall.perSet = setsPlayed>0 ? spikeOverall.decided/setsPlayed : null;
   const combos = [...new Set(attacks.map(e=>e.combo).filter(Boolean))].sort();
   const spikeByCombo = combos.map(c=>spikeStats(attacks.filter(e=>e.combo===c), c));
 
@@ -55,6 +60,14 @@ function computeDetailedStats(events, setsPlayed, player){
     miss:tosses.filter(e=>e.resultLabel==='ミス').length,
   };
   tossStatsV.successRate = tossStatsV.total>0 ? tossStatsV.success/tossStatsV.total*100 : null;
+  // トスの種類（コンビ／2段トス）別・あげ先コンビ別・相手コートへの返球数
+  tossStatsV.combo = tosses.filter(e=>e.subType!=='2段トス').length;
+  tossStatsV.nidan = tosses.filter(e=>e.subType==='2段トス').length;
+  tossStatsV.returned = tosses.filter(e=>e.returnedToOpponent===true).length;
+  const tossDestNames = [...new Set(tosses.map(e=>e.combo).filter(Boolean))].sort();
+  tossStatsV.byDest = tossDestNames.map(c=>({ name:c,
+    combo: tosses.filter(e=>e.combo===c && e.subType!=='2段トス').length,
+    nidan: tosses.filter(e=>e.combo===c && e.subType==='2段トス').length }));
 
   const srs = events.filter(e=>e.playType==='serveReceive');
   const srOverall = receiveStats(srs, '総合');
@@ -63,11 +76,19 @@ function computeDetailedStats(events, setsPlayed, player){
 
   const recs = events.filter(e=>e.playType==='receive');
   const recOverall = receiveStats(recs, '総合');
+  // 強打の成功率＝（強打のA＋B＋Cパス数）÷強打の総受数
+  const hardRecs = recs.filter(e=>e.opponentAttackType==='強打');
+  const hardTotal = hardRecs.length;
+  const hardOk = hardRecs.filter(e=>['Aパス','Bパス','Cパス'].includes(e.resultLabel)).length;
+  recOverall.hardHit = { total:hardTotal, success:hardOk, miss:hardRecs.filter(e=>e.resultLabel==='ミス').length,
+    successRate: hardTotal>0 ? hardOk/hardTotal*100 : null };
   const attackTypes = [...new Set(recs.map(e=>e.opponentAttackType).filter(Boolean))].sort();
   const recByType = attackTypes.map(t=>receiveStats(recs.filter(e=>e.opponentAttackType===t), t));
 
   const blocks = events.filter(e=>e.playType==='block');
-  const blockStatsV = { decided: blocks.filter(e=>e.resultLabel==='決定').length, setsPlayed };
+  const blockStatsV = { decided: blocks.filter(e=>e.resultLabel==='決定').length,
+    touch: blocks.filter(e=>e.resultLabel==='タッチ').length,
+    blockOut: blocks.filter(e=>e.resultLabel==='ブロックアウト').length, setsPlayed };
   blockStatsV.perSet = setsPlayed>0 ? blockStatsV.decided/setsPlayed : null;
 
   const lossEvents = events.filter(e=>e.playType==='lossOfPoint');
@@ -84,7 +105,7 @@ function computeDetailedStats(events, setsPlayed, player){
   };
   // 総失点：失点タブでの記録（反則/レシーブミス/連携ミス/その他）に加えて、
   // サーブミス・キャッチミス・スパイクミスも合算した「この選手が絡んだ失点の合計」
-  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss;
+  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut;
 
   return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
     serveReceiveOverall:srOverall, serveReceiveByType:srByType, receiveOverall:recOverall, receiveByType:recByType,
@@ -297,12 +318,12 @@ function defaultRecordsTeamName(){
 function aggregateFromPlayerList(list){
   const spike = list.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided, miss:s.miss+p.spikeOverall.miss, blocked:s.blocked+p.spikeOverall.blocked}), {total:0,decided:0,miss:0,blocked:0});
   const serve = list.reduce((s,p)=>({total:s.total+p.serve.total, decided:s.decided+p.serve.decided, effective:s.effective+p.serve.effective, miss:s.miss+p.serve.miss}), {total:0,decided:0,effective:0,miss:0});
-  const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass, miss:s.miss+p.serveReceiveOverall.miss}), {total:0,aPass:0,miss:0});
+  const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass, bPass:s.bPass+p.serveReceiveOverall.bPass, miss:s.miss+p.serveReceiveOverall.miss}), {total:0,aPass:0,bPass:0,miss:0});
   const totalBlocks = list.reduce((s,p)=>s+p.block.decided, 0);
   return {
     spikeRate: spike.total>0 ? spike.decided/spike.total*100 : null,
     serveRate: serve.total>0 ? (serve.decided*100+serve.effective*25-serve.miss*25)/serve.total : null,
-    catchRate: rec.total>0 ? rec.aPass/rec.total*100 : null,
+    catchRate: rec.total>0 ? (rec.aPass*100+rec.bPass*50)/rec.total : null,
     totalBlocks,
     serveMiss: serve.miss, spikeMiss: spike.miss, spikeBlocked: spike.blocked, catchMiss: rec.miss,
   };

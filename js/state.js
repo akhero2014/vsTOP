@@ -51,6 +51,7 @@ const PLAY_TYPES = {
     results:[
       {label:'決定', color:'#22c55e', outcome:'acting'},
       {label:'タッチ', color:'#10b981', outcome:'none'},
+      {label:'ブロックアウト', color:'#ef4444', outcome:'opponent'},
     ]},
     lossOfPoint:  { label:'失点', icon:'📉', hasCourse:false, results:[] },
 };
@@ -62,6 +63,7 @@ const LOSS_FOUL_DETAILS = ['ネットタッチ','オーバーネット','パッ�
 const COURSES = ['左','中央','右','バック左','バック中央','バック右'];
 const POSITIONS = ['OH','OP','MB','S','L','R'];
 const ATTACK_TYPES = ['強打','フェイント','ロール'];
+const TOSS_KINDS = ['コンビ','2段トス'];
 
 // ホームチームのポジション配列（画面左→右）。相手チームは鏡写しなので別配列。
 const HOME_FRONT = [3,2,1]; // P4,P3,P2
@@ -115,6 +117,7 @@ function defaultState(){
       {name:'レフト', category:'レフト'}, {name:'ライト', category:'ライト'}, {name:'パイプ', category:'バック'},
     ],
     serveTypeOptions:['ジャンプ','フローター','サイド','アンダー'],
+    selectedTossKind:'コンビ', tossPopup:null, pendingTossEventId:null, tossReturnedChoice:null, tossReturnCombo:null,
     showTossTab:false, showAttackSubType:false, showAttackEffective:false, showBlockTouch:false,
     homePlayers, awayPlayers,
     homeRotation:[homeIds[3],homeIds[4],homeIds[1],homeIds[8],homeIds[0],homeIds[5]],

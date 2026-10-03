@@ -321,6 +321,9 @@ function renderPlayEntry(){
   if (state.selectedPlayType==='attack'){
     extra += renderComboPicker(state.selectedCombo, 'pickCombo');
   }
+  if (state.selectedPlayType==='toss'){
+    extra += choiceSectionHtml('トスの種類（あげ先は続くスパイクで記録）', TOSS_KINDS, state.selectedTossKind, 'pickTossKind');
+  }
   if (state.selectedPlayType==='serve'){
     extra += choiceSectionHtml('サーブの種類', state.serveTypeOptions, state.selectedSubType, 'pickSubType');
   } else if (pt.subTypes && state.showAttackSubType){
@@ -360,7 +363,27 @@ function renderPlayEntry(){
 
     <button class="record-btn" ${can?'':'disabled'} onclick="recordPlay()">このプレーを記録する</button>
     ${(state.selectedResult && !can) ? '<div class="warn-text">結果以外の選択項目もすべて選んでください</div>' : ''}
-  </div>`;
+  </div>${renderTossPopup()}`;
+}
+
+/// トス失敗時のポップアップ
+function renderTossPopup(){
+  if (!state.tossPopup) return '';
+  let body;
+  if (state.tossPopup.step==='ask'){
+    body = `<h2>トスが相手コートへ返球されましたか？</h2>
+      <div class="row gap10" style="justify-content:center;">
+        <button class="btn primary" style="min-width:110px;" onclick="answerTossReturned(true)">はい</button>
+        <button class="btn" style="min-width:110px;" onclick="answerTossReturned(false)">いいえ</button>
+      </div>
+      <p class="muted">「いいえ」の場合は、成功と同様に続くスパイクで行き先を記録します。</p>`;
+  } else {
+    body = `<h2>どこへのトスでしたか？</h2>${renderComboPicker(state.tossReturnCombo, 'pickTossReturnCombo')}`;
+  }
+  return `<div class="overlay" style="z-index:90;"><div class="sheet" style="max-width:480px;"><div class="sheet-body col gap16" style="text-align:center;">
+    ${body}
+    <button class="btn" onclick="cancelTossPopup()">キャンセル</button>
+  </div></div></div>`;
 }
 
 /* ========================= 試合中：ラリー履歴 ========================= */
@@ -449,6 +472,7 @@ function saveEditedRallyEntry(){
   if (idx===0){
     // 一番新しいプレーは、一旦取り消してから通常の記録操作と同じ流れでもう一度記録し直す
     const savedPlayType = e.playType;
+    const savedReturned = e.returnedToOpponent;
     undoLastSilent();
     state.selectedTeam = draft.team;
     state.selectedPlayerId = draft.playerId;
@@ -457,6 +481,12 @@ function saveEditedRallyEntry(){
     state.selectedCourse = draft.course;
     state.selectedSubType = draft.subType;
     state.selectedCombo = draft.combo;
+    if (savedPlayType==='toss'){
+      state.selectedTossKind = draft.subType || 'コンビ';
+      state.tossReturnedChoice = draft.result==='失敗' ? (savedReturned===true) : null;
+      state.tossReturnCombo = draft.combo || null;
+      state.selectedSubType = null;
+    }
     state.selectedOpponentServeType = draft.opponentServeType;
     state.selectedOpponentAttackType = draft.opponentAttackType;
     state.editingRallyIndex = null; state.editDraft = null;
@@ -510,8 +540,11 @@ function renderEditRallySheet(){
   if (e.playType==='receive'){
     extra += choiceSectionHtml('相手の攻撃種類', ATTACK_TYPES, draft.opponentAttackType, 'pickEditOppAttack');
   }
-  if (e.playType==='attack'){
+  if (e.playType==='attack' || e.playType==='toss'){
     extra += renderComboPicker(draft.combo, 'pickEditCombo');
+  }
+  if (e.playType==='toss'){
+    extra += choiceSectionHtml('トスの種類', TOSS_KINDS, draft.subType, 'pickEditSubType');
   }
   if (e.playType==='serve'){
     extra += choiceSectionHtml('サーブの種類', state.serveTypeOptions, draft.subType, 'pickEditSubType');

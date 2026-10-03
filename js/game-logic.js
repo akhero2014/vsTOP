@@ -74,6 +74,7 @@ function selectPlayType(type){
   state.selectedPlayType = type;
   state.selectedResult = null; state.selectedCourse = null; state.selectedSubType = null; state.selectedCombo = null;
   state.selectedOpponentServeType = null; state.selectedOpponentAttackType = null;
+  if (type==='serve' || type==='serveReceive') state.pendingTossEventId = null;
   if (type==='serve') autoSelectServer();
   if (type==='serveReceive'){
     // 相手のサーブ種類は「継続」で選ばれるようにする：個別に記録している場合は
@@ -191,6 +192,13 @@ function recordPlay(){
       .concat((state.awayLiberoSelection||[]).map((id,i)=> id ? { position:'L'+(i+1), playerId:id } : null).filter(Boolean));
   }
 
+  // トスで「失敗」の場合は、相手コートへ返球されたかどうかを先に確認する
+  if (state.selectedPlayType==='toss' && state.selectedResult==='失敗' && state.tossReturnedChoice===null){
+    state.tossPopup = { step:'ask' };
+    render();
+    return;
+  }
+
   const resultOpt = PLAY_TYPES[state.selectedPlayType].results.find(r=>r.label===state.selectedResult);
   const outcome = resultOpt.outcome;
 
@@ -204,13 +212,27 @@ function recordPlay(){
     id:uid(), team:state.selectedTeam, playerId:player.id, playerNumber:player.number, playerName:player.name,
     playType:state.selectedPlayType, resultLabel:resultOpt.label, outcome,
     course:(PLAY_TYPES[state.selectedPlayType].hasCourse && state.showCourseSelector) ? state.selectedCourse : null,
-    subType: state.selectedSubType,
-    combo: state.selectedPlayType==='attack' ? state.selectedCombo : null,
+    subType: state.selectedPlayType==='toss' ? state.selectedTossKind : state.selectedSubType,
+    // スパイク：打ったコンビ／トス：あげ先のコンビ（返球時はポップアップで選択、それ以外は続くスパイクの記録時に自動で入る）
+    combo: state.selectedPlayType==='attack' ? state.selectedCombo : (state.selectedPlayType==='toss' ? (state.tossReturnCombo||null) : null),
+    returnedToOpponent: (state.selectedPlayType==='toss' && state.selectedResult==='失敗') ? state.tossReturnedChoice===true : null,
     opponentServeType: state.selectedPlayType==='serveReceive' ? state.selectedOpponentServeType : null,
     opponentAttackType: state.selectedPlayType==='receive' ? state.selectedOpponentAttackType : null,
     setNumber: state.currentSet, snapshot,
   };
   state.rallyLog.unshift(event);
+
+  // トスのあげ先：直前のトスが相手コートへ返球されていなければ、続くスパイクのコンビをトスにも記録する
+  if (state.selectedPlayType==='attack' && state.pendingTossEventId){
+    const tossEv = state.rallyLog.find(x=>x.id===state.pendingTossEventId);
+    if (tossEv && state.selectedCombo) tossEv.combo = state.selectedCombo;
+    state.pendingTossEventId = null;
+  }
+  state.pendingTossEventId = null;
+  if (state.selectedPlayType==='toss' && !(state.selectedResult==='失敗' && state.tossReturnedChoice===true) && outcome==='none'){
+    state.pendingTossEventId = event.id;
+  }
+  state.tossReturnedChoice = null; state.tossReturnCombo = null; state.tossPopup = null;
 
   const wasServe = state.selectedPlayType==='serve';
   const wasServeReceive = state.selectedPlayType==='serveReceive';
@@ -233,6 +255,10 @@ function recordPlay(){
   const originalPlayType = state.selectedPlayType;
 
   if (pointWinner) selectPlayType(pointWinner==='home' ? 'serve' : 'serveReceive');
+  else if (wasToss && state.rallyLog[0].returnedToOpponent===true){
+    // 相手コートへ返球された場合は、その後の自チームのプレーは続かないため遷移せず選択のみ戻す
+    state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null;
+  }
   else if (wasServe || wasServeReceive || wasToss){
     // 得点にならなかった場合は、その時点で表示されているタブの「右側（次）」に自動遷移する。
     // 選手の自動選択は、遷移先タブそれぞれのルール（selectPlayType内）にそのまま従う。
@@ -270,6 +296,7 @@ function handleResultTap(label){
 function undoLastSilent(){
   const last = state.rallyLog.shift();
   if (!last) return false;
+  if (state.pendingTossEventId===last.id) state.pendingTossEventId = null;
   state.setScores[state.setScores.length-1] = last.snapshot.setScore;
   state.homeRotation = last.snapshot.homeRotation;
   state.awayRotation = last.snapshot.awayRotation;
@@ -470,3 +497,22 @@ function opponentErrorsBenefiting(team){
 }
 
 /* ========================= 選手・チーム管理 ========================= */
+
+
+/* ---- トス「失敗」時のポップアップ（相手コートへ返球されたか → どこへのトスだったか） ---- */
+function pickTossKind(kind){ state.selectedTossKind = kind; render(); }
+
+/// 「相手コートへ返球されましたか？」への回答。いいえ＝成功と同様に続くスパイクで行き先を記録、はい＝続けて行き先を選ぶ
+function answerTossReturned(returned){
+  if (returned){
+    state.tossReturnedChoice = true;
+    if (state.attackComboOptions.length){ state.tossPopup = { step:'combo' }; render(); return; }
+    state.tossPopup = null; recordPlay();
+  } else {
+    state.tossReturnedChoice = false; state.tossPopup = null; recordPlay();
+  }
+}
+function pickTossReturnCombo(name){
+  state.tossReturnCombo = name; state.tossPopup = null; recordPlay();
+}
+function cancelTossPopup(){ state.tossPopup = null; state.tossReturnedChoice = null; state.tossReturnCombo = null; render(); }
