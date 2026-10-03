@@ -57,7 +57,7 @@ const PLAY_TYPES = {
 };
 const PLAY_ORDER = ['serve','serveReceive','receive','toss','attack','block','lossOfPoint'];
 /// 失点のジャンル。連携ミスのみ複数選手を選択できる
-const LOSS_GENRES = ['反則','レシーブミス','連携ミス','その他'];
+const LOSS_GENRES = ['反則','つなぎミス','連携ミス','その他'];
 /// 反則の細分化。その他のみプレイヤー選択が任意（選ばなければチームのミス扱い）
 const LOSS_FOUL_DETAILS = ['ネットタッチ','オーバーネット','パッシング','ホールディング','ドリブル','ポジショナルフォルト','その他'];
 const COURSES = ['左','中央','右','バック左','バック中央','バック右'];
@@ -140,10 +140,24 @@ function defaultState(){
 
 let state = load();
 
+/// 失点タブのジャンル名変更：過去に「レシーブミス」として記録された失点は「つなぎミス」として扱う
+function migrateLossGenreNames(st){
+  const fix = (log)=>{
+    if (!Array.isArray(log)) return;
+    log.forEach(e=>{
+      if (e && e.playType==='lossOfPoint' && e.genre==='レシーブミス'){ e.genre='つなぎミス'; if (e.resultLabel==='レシーブミス') e.resultLabel='つなぎミス'; }
+    });
+  };
+  fix(st.rallyLog);
+  if (Array.isArray(st.matchHistory)) st.matchHistory.forEach(m=>fix(m && m.rallyLog));
+  if (st.selectedLossGenre==='レシーブミス') st.selectedLossGenre = 'つなぎミス';
+  return st;
+}
+
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
+    if (raw) return migrateLossGenreNames(Object.assign(defaultState(), JSON.parse(raw)));
   }catch(e){}
   return defaultState();
 }
@@ -194,6 +208,7 @@ function exportAllDataAsJSON(){
 /// 以前のバージョンで書き出したバックアップにも対応できるよう、
 /// 形式が変わったフィールドをここで今の形に揃えておく（復元直後のクラッシュを防ぐ）
 function normalizeImportedState(imported){
+  migrateLossGenreNames(imported);
   // attackComboOptions: 昔は文字列の配列だった（今は {name, category} の配列）
   if (Array.isArray(imported.attackComboOptions)){
     imported.attackComboOptions = imported.attackComboOptions.map(item=>{

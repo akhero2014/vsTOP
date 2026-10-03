@@ -90,7 +90,7 @@ function renderRecordsSheet(){
   else if (tab==='selected') body += renderSelectedAggregateTab(teamName);
   else if (tab==='csv') body += renderCsvTab(teamName);
 
-  return sheetShell('これまでの記録', body, 'max-width:900px;');
+  return sheetShell('これまでの記録', body, 'max-width:990px;');
 }
 
 /* ---- 試合ごと（そのチーム名が関わった試合だけを表示。一覧＋ドリルダウン） ---- */

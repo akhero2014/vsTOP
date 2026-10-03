@@ -144,7 +144,7 @@ function moveOptionListItem(field, index, direction){
 /// スパイクのコンビネーション専用の編集リスト（カテゴリ：レフト/クイック/ライト/バック の指定つき）
 function renderComboOptionListSection(){
   const isOpen = state.editingOptionList==='attackComboOptions';
-  const categories = ['レフト','クイック','ライト','バック'];
+  const categories = ['レフト','クイック','ライト','バック','その他'];
   let html = `
     <div class="row" style="justify-content:space-between;margin-bottom:6px;">
       <strong>スパイクのコンビネーション</strong>
@@ -169,7 +169,7 @@ function renderComboOptionListSection(){
     });
     html += `
       <div class="col gap8" style="margin-top:12px;">
-        <label class="muted">分類（表示位置：レフト/クイック/ライトは上段、バックは下段）</label>
+        <label class="muted">分類（表示位置：レフト/クイック/ライトは上段、バック、その他の順で下段）</label>
         <select class="field" onchange="state.newComboCategory=this.value;">
           ${categories.map(c=>`<option value="${c}" ${((state.newComboCategory||'レフト')===c)?'selected':''}>${c}</option>`).join('')}
         </select>

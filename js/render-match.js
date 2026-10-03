@@ -218,6 +218,7 @@ function pickCombo(v){ state.selectedCombo = state.selectedCombo===v ? null : v;
 function renderComboPicker(selected, onPickFn){
   const options = state.attackComboOptions; // [{name, category}]
   const cat = (c) => options.filter(o=>o.category===c);
+  // 4分類以外（旧データの未分類など）は「その他」にまとめて表示する
   const others = options.filter(o=>!['レフト','クイック','ライト','バック'].includes(o.category));
 
   const btn = (opt) => `<button class="combo-btn ${selected===opt.name?'active':''}"
@@ -231,8 +232,8 @@ function renderComboPicker(selected, onPickFn){
       <div class="combo-col combo-col-top">${cat('クイック').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
       <div class="combo-col combo-col-top combo-col-last">${cat('ライト').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
       <div class="combo-col combo-col-back">${cat('バック').map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
+      <div class="combo-col combo-col-back combo-col-other">${others.map(btn).join('') || '<span class="muted" style="font-size:11px;">-</span>'}</div>
     </div>
-    ${others.length ? `<div class="choice-grid">${others.map(o=>`<button class="choice-btn ${selected===o.name?'active':''}" onclick="${onPickFn}('${o.name.replace(/'/g,"\\'")}')">${esc(o.name)}</button>`).join('')}</div>` : ''}
     ${options.length===0 ? '<div class="muted">設定から追加できます</div>' : ''}
   </div>`;
 }

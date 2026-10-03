@@ -352,7 +352,7 @@ function canRecordLossOfPoint(){
   if (state.selectedLossGenre==='反則'){
     if (!state.selectedLossDetail) return false;
     if (state.selectedLossDetail!=='その他' && state.selectedLossPlayerIds.length!==1) return false;
-  } else if (state.selectedLossGenre==='レシーブミス'){
+  } else if (state.selectedLossGenre==='つなぎミス'){
     if (state.selectedLossPlayerIds.length!==1) return false;
   } else if (state.selectedLossGenre==='連携ミス'){
     if (state.selectedLossPlayerIds.length<1) return false;

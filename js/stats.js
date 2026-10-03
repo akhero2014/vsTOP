@@ -103,13 +103,14 @@ function computeDetailedStats(events, setsPlayed, player){
     total: lossEvents.length,
     反則: lossFouls.length,
     foulByDetail: lossFoulByDetail,
-    レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
+    つなぎミス: lossEvents.filter(e=>e.genre==='つなぎミス').length,
     連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').length,
     その他: lossEvents.filter(e=>e.genre==='その他').length,
   };
-  // 総失点：失点タブでの記録（反則/レシーブミス/連携ミス/その他）に加えて、
+  // 総失点：失点タブでの記録（反則/つなぎミス/連携ミス/その他）に加えて、
   // サーブミス・キャッチミス・スパイクミスも合算した「この選手が絡んだ失点の合計」
-  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut + tossStatsV.miss;
+  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut + tossStatsV.miss + recOverall.miss;
+  lossOfPointV.receiveTabMiss = recOverall.miss;
 
   // 総得点：この選手自身の得点になったプレー（スパイク決定・サーブエース・ブロック決定）
   const totalPoints = events.filter(e=>e.outcome==='acting' && e.playType!=='lossOfPoint').length;
@@ -157,7 +158,7 @@ function lossOfPointBreakdownFromEvents(lossEvents){
     total: lossEvents.length,
     反則: fouls.length,
     foulByDetail,
-    レシーブミス: lossEvents.filter(e=>e.genre==='レシーブミス').length,
+    つなぎミス: lossEvents.filter(e=>e.genre==='つなぎミス').length,
     連携ミス: lossEvents.filter(e=>e.genre==='連携ミス').map(e=>({ playerNames: e.playerNames||[] })),
     その他: lossEvents.filter(e=>e.genre==='その他').length,
   };

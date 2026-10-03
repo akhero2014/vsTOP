@@ -52,7 +52,7 @@ function statsRowsHtml(rows, opts){
     </table>
   </div>
   ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、L1/L2はリベロ、MCは途中出場（メンバーチェンジ）</p>' : ''}
-  <p class="muted" style="font-size:11px;margin-top:4px;">レシーブの返球率＝（強打のA×100＋B×50＋C×25－ミス×100）÷強打の受数　BO数＝ブロックアウト本数　総得点＝スパイク決定・サーブエース・ブロック決定の合計　総失点＝サーブミス・キャッチミス・スパイクミス・トスミス・ブロックアウト・失点タブでの記録の合計</p>`;
+  <p class="muted" style="font-size:11px;margin-top:4px;">レシーブの返球率＝（強打のA×100＋B×50＋C×25－ミス×100）÷強打の受数　BO数＝ブロックアウト本数　総得点＝スパイク決定・サーブエース・ブロック決定の合計　総失点＝サーブミス・キャッチミス・レシーブミス・スパイクミス・トスミス・ブロックアウト・失点タブ（反則/つなぎミス/連携ミス/その他）の合計</p>`;
 }
 
 /* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
@@ -177,10 +177,10 @@ function renderPlayerDetailOverlay(){
     body += statCard(`
       ${statLine('失点タブでの記録合計', s.lossOfPoint.total)}
       ${statLine('反則', s.lossOfPoint.反則)}
-      ${statLine('レシーブミス', s.lossOfPoint.レシーブミス)}
+      ${statLine('つなぎミス', s.lossOfPoint.つなぎミス)}
       ${statLine('連携ミス', s.lossOfPoint.連携ミス)}
       ${statLine('その他', s.lossOfPoint.その他)}
-      ${statLine('総失点（サーブ/キャッチ/スパイクミス含む）', s.lossOfPoint.totalLoss)}
+      ${statLine('総失点（サーブ・キャッチ・レシーブ・スパイク・トスのミス、ブロックアウト含む）', s.lossOfPoint.totalLoss)}
     `);
     if (s.lossOfPoint.反則>0){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">反則の内訳</div>`;
@@ -240,7 +240,7 @@ function lossOfPointBreakdownHtml(breakdown){
       html += `<div class="row" style="justify-content:space-between;padding-left:16px;"><span class="muted">　└ ${esc(d)}</span><strong>${breakdown.foulByDetail[d]}</strong></div>`;
     }
   });
-  html += `<div class="row" style="justify-content:space-between;"><span class="muted">レシーブミス</span><strong>${breakdown.レシーブミス}</strong></div>`;
+  html += `<div class="row" style="justify-content:space-between;"><span class="muted">つなぎミス</span><strong>${breakdown.つなぎミス}</strong></div>`;
   html += `<div class="row" style="justify-content:space-between;"><span class="muted">連携ミス</span><strong>${breakdown.連携ミス.length}</strong></div>`;
   breakdown.連携ミス.forEach(m=>{
     html += `<div class="row" style="justify-content:space-between;padding-left:16px;"><span class="muted">　└ ${esc(m.playerNames.join('・')||'選手未選択')}</span></div>`;
