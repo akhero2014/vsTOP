@@ -6,7 +6,7 @@
    CACHE_NAME のバージョン番号を必ず上げてください。
    そうしないと、古いキャッシュが使われ続けて更新が反映されません。 */
 
-const CACHE_NAME = 'vstop-cache-v10';
+const CACHE_NAME = 'vstop-cache-v11';
 
 const ASSETS_TO_CACHE = [
   './',

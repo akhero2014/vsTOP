@@ -352,7 +352,7 @@ function renderPlayEntry(){
     ${extra}
 
     <div class="col gap8">
-      <div class="choice-title">${esc(pt.label)}の結果を選択</div>
+      ${state.selectedPlayType==='attack' ? '' : `<div class="choice-title">${esc(pt.label)}の結果を選択</div>`}
       <div class="result-grid">
         ${visibleResultOptions(state.selectedPlayType).map(r=>`
           <button class="result-btn" style="background:${state.selectedResult===r.label?r.color:r.color+'33'};
