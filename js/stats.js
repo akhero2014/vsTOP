@@ -107,7 +107,9 @@ function computeDetailedStats(events, setsPlayed, player){
   // サーブミス・キャッチミス・スパイクミスも合算した「この選手が絡んだ失点の合計」
   lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut;
 
-  return { player, setsParticipated:setsPlayed, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
+  // 総得点：この選手自身の得点になったプレー（スパイク決定・サーブエース・ブロック決定）
+  const totalPoints = events.filter(e=>e.outcome==='acting' && e.playType!=='lossOfPoint').length;
+  return { player, setsParticipated:setsPlayed, totalPoints, spikeOverall, spikeByCombo, serve:serveStatsV, serveByType, toss:tossStatsV,
     serveReceiveOverall:srOverall, serveReceiveByType:srByType, receiveOverall:recOverall, receiveByType:recByType,
     block:blockStatsV, lossOfPoint:lossOfPointV };
 }
@@ -319,11 +321,13 @@ function aggregateFromPlayerList(list){
   const spike = list.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided, miss:s.miss+p.spikeOverall.miss, blocked:s.blocked+p.spikeOverall.blocked}), {total:0,decided:0,miss:0,blocked:0});
   const serve = list.reduce((s,p)=>({total:s.total+p.serve.total, decided:s.decided+p.serve.decided, effective:s.effective+p.serve.effective, miss:s.miss+p.serve.miss}), {total:0,decided:0,effective:0,miss:0});
   const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass, bPass:s.bPass+p.serveReceiveOverall.bPass, miss:s.miss+p.serveReceiveOverall.miss}), {total:0,aPass:0,bPass:0,miss:0});
+  const hard = list.reduce((s,p)=>({total:s.total+p.receiveOverall.hardHit.total, success:s.success+p.receiveOverall.hardHit.success}), {total:0,success:0});
   const totalBlocks = list.reduce((s,p)=>s+p.block.decided, 0);
   return {
     spikeRate: spike.total>0 ? spike.decided/spike.total*100 : null,
     serveRate: serve.total>0 ? (serve.decided*100+serve.effective*25-serve.miss*25)/serve.total : null,
     catchRate: rec.total>0 ? (rec.aPass*100+rec.bPass*50)/rec.total : null,
+    receiveRate: hard.total>0 ? hard.success/hard.total*100 : null,
     totalBlocks,
     serveMiss: serve.miss, spikeMiss: spike.miss, spikeBlocked: spike.blocked, catchMiss: rec.miss,
   };

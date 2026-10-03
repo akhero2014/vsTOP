@@ -271,7 +271,7 @@ function renderPlayersCareerTab(teamName){
       ${renderNameMergeList(teamName)}
     </div>`;
   }
-  html += all.length ? statsRowsHtml(all) : '<p class="muted">まだ記録がありません</p>';
+  html += all.length ? statsRowsHtml(all, {career:true}) : '<p class="muted">まだ記録がありません</p>';
   return html;
 }
 

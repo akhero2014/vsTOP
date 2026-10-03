@@ -110,6 +110,18 @@ function substitute(team, positionIndex, incomingId){
   render();
 }
 
+/// リベロ交代：L1/L2の枠を別の選手に入れ替える（出た選手・入った選手とも「交代したことがある」として記録）
+function substituteLibero(team, index, incomingId){
+  const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;
+  const outgoingId = sel[index];
+  if (!state.substitutedPlayerIds) state.substitutedPlayerIds = [];
+  [outgoingId, incomingId].forEach(id=>{
+    if (id && !state.substitutedPlayerIds.includes(id)) state.substitutedPlayerIds.push(id);
+  });
+  sel[index] = incomingId;
+  render();
+}
+
 /// リベロ(L1/L2)は名簿の「ポジション」欄ではなく、試合開始設定でその試合ごとに選んだ2名を使う
 function liberos(team){
   const sel = team==='home' ? state.homeLiberoSelection : state.awayLiberoSelection;

@@ -10,14 +10,15 @@ function csvEscape(text){
 function fmt(v, digits){ return v===null||v===undefined ? '' : v.toFixed(digits===undefined?1:digits); }
 
 function simpleStatsCSV(rows, filename){
-  const lines = ['#,選手名,出場セット数,スパイク本数,スパイク決定率(%),スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチ成功率(%),キャッチミス,ブロック本数'];
+  const lines = ['#,選手名,セット数,スパイク本数,スパイク決定数,スパイク決定率(%),セット平均決定本数,スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチ成功率(%),キャッチミス,総レシーブ数,強打レシーブ数,強打レシーブ成功率(%),レシーブミス,ブロック決定本数,タッチ数,BO数,総得点,総失点'];
   for (const r of rows){
     lines.push([
       r.player.number, csvEscape(r.player.name), r.setsParticipated,
-      r.spikeOverall.total, fmt(r.spikeOverall.decisionRate), r.spikeOverall.miss, r.spikeOverall.blocked,
+      r.spikeOverall.total, r.spikeOverall.decided, fmt(r.spikeOverall.decisionRate), fmt(r.spikeOverall.perSet,2), r.spikeOverall.miss, r.spikeOverall.blocked,
       r.serve.total, fmt(r.serve.effectiveRate), r.serve.miss,
       r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.successRate), r.serveReceiveOverall.miss,
-      r.block.decided,
+      r.receiveOverall.total, r.receiveOverall.hardHit.total, fmt(r.receiveOverall.hardHit.successRate), r.receiveOverall.miss,
+      r.block.decided, r.block.touch, r.block.blockOut, r.totalPoints||0, r.lossOfPoint?r.lossOfPoint.totalLoss:0,
     ].join(','));
   }
   shareOrSaveCsvFiles([{ filename: filename+'.csv', content: lines.join('\n') }], { zipName: filename });
@@ -310,7 +311,7 @@ function buildPlayerCsvForMatches(matches, name, teamName){
     if (section){ matchNum++; body += '【第'+matchNum+'試合】\n'+section; }
   });
   if (!body) return null;
-  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\nキャッチ成功率,"((Aパス数×100)+(Bパス数×50))÷総受数"\nレシーブ強打成功率,"(強打のAパス数+Bパス数+Cパス数)÷強打の総受数"\nセットあたりのアタック決定本数,"スパイク決定本数÷出場セット数"\n';
+  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\nキャッチ成功率,"((Aパス数×100)+(Bパス数×50))÷総受数"\nレシーブ強打成功率,"(強打のAパス数+Bパス数+Cパス数)÷強打の総受数"\nセットあたりのアタック決定本数,"スパイク決定本数÷セット数"\n';
   return body;
 }
 

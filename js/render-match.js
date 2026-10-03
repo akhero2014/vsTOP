@@ -377,6 +377,9 @@ function renderTossPopup(){
         <button class="btn" style="min-width:110px;" onclick="answerTossReturned(false)">いいえ</button>
       </div>
       <p class="muted">「いいえ」の場合は、成功と同様に続くスパイクで行き先を記録します。</p>`;
+  } else if (state.tossPopup.step==='missCombo'){
+    body = `<h2>どこへのトスでミスしましたか？</h2>${renderComboPicker(null, 'pickTossMissCombo')}
+      <button class="btn" onclick="pickTossMissCombo(null)">あげ先を記録しない</button>`;
   } else {
     body = `<h2>どこへのトスでしたか？</h2>${renderComboPicker(state.tossReturnCombo, 'pickTossReturnCombo')}`;
   }
@@ -483,7 +486,7 @@ function saveEditedRallyEntry(){
     state.selectedCombo = draft.combo;
     if (savedPlayType==='toss'){
       state.selectedTossKind = draft.subType || 'コンビ';
-      state.tossReturnedChoice = draft.result==='失敗' ? (savedReturned===true) : null;
+      state.tossReturnedChoice = draft.result==='失敗' ? (savedReturned===true) : (draft.result==='ミス' ? 'miss' : null);
       state.tossReturnCombo = draft.combo || null;
       state.selectedSubType = null;
     }

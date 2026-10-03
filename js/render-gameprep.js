@@ -194,6 +194,24 @@ function renderSubstitutionSheet(){
       </button>`;
   };
 
+  const liberoSlot = (i)=>{
+    const lid = (liberoSelection(team)||[])[i];
+    const lp = lid ? findPlayer(lid, team) : null;
+    const key = 'L'+i;
+    const colorStyle = lp ? (positionColorStyle(lp) || 'background:#f59e0b;') : 'background:rgba(255,255,255,.25);';
+    return `
+      <button class="mini-slot ${lp?'filled':''}" style="${selIndex===key?'outline:3px solid #facc15;':''}"
+        onclick="state.subPositionIndex='${key}'; render();">
+        <div class="c" style="${colorStyle}">${lp?lp.number:'-'}</div>
+        <div style="font-size:9px;">L${i+1}</div>
+        <div style="font-size:10px;">${lp?esc(lp.name):'未設定'}</div>
+      </button>`;
+  };
+  const isLiberoSel = typeof selIndex==='string';
+  const pickFn = (id)=> isLiberoSel
+    ? `substituteLibero('${team}',${selIndex.slice(1)},'${id}'); state.subPositionIndex=null;`
+    : `substitute('${team}',${selIndex},'${id}'); state.subPositionIndex=null;`;
+
   const body = `
     <div class="row gap8" style="margin-bottom:12px;">
       <button class="btn ${team==='home'?'primary':''}" onclick="state.subTeam='home'; state.subPositionIndex=null; render();">${esc(state.homeTeamName)}</button>
@@ -202,15 +220,16 @@ function renderSubstitutionSheet(){
     <div class="mini-court">
       <div class="row gap8" style="margin-bottom:8px;">${front.map(slot).join('')}</div>
       <div class="row gap8">${back.map(slot).join('')}</div>
+      <div class="row gap8" style="margin-top:10px;">${liberoSlot(0)}${liberoSlot(1)}</div>
     </div>
     ${selIndex!==null && selIndex!==undefined ? `
       <h3 style="margin-top:16px;">交代で入る選手</h3>
-      <p class="muted" style="font-size:11px;margin-bottom:6px;">オレンジ色の選手は、この試合で一度交代したことがあります。リベロ（L1/L2）に設定されている選手はここには表示されません。</p>
+      <p class="muted" style="font-size:11px;margin-bottom:6px;">オレンジ色の選手は、この試合で一度交代したことがあります。リベロ（L1/L2）を交代する場合は、下段のL1/L2を選んでください。現在リベロの選手はここには表示されません。</p>
       ${bench.length ? bench.map(p=>{
         const wasSubstituted = substitutedIds.includes(p.id);
         return `
         <button class="btn" style="width:100%;text-align:left;margin-bottom:6px;${wasSubstituted?'background:rgba(249,115,22,.15);border-color:#f97316;':''}"
-          onclick="substitute('${team}',${selIndex},'${p.id}'); state.subPositionIndex=null;">
+          onclick="${pickFn(p.id)}">
           #${p.number} ${esc(p.name)} <span class="muted">${esc(positionsDisplayText(p))}</span>${wasSubstituted?' <span style="color:#f97316;">（交代済み）</span>':''}
         </button>`;
       }).join('') : '<p class="muted">交代可能な選手（ベンチ）がいません</p>'}

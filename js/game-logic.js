@@ -198,6 +198,10 @@ function recordPlay(){
     render();
     return;
   }
+  // トスで「ミス」の場合も、どこにあげてミスしたかを確認する（コンビ設定がなければ省略）
+  if (state.selectedPlayType==='toss' && state.selectedResult==='ミス' && state.tossReturnedChoice===null){
+    if (state.attackComboOptions.length){ state.tossPopup = { step:'missCombo' }; render(); return; }
+  }
 
   const resultOpt = PLAY_TYPES[state.selectedPlayType].results.find(r=>r.label===state.selectedResult);
   const outcome = resultOpt.outcome;
@@ -511,6 +515,10 @@ function answerTossReturned(returned){
   } else {
     state.tossReturnedChoice = false; state.tossPopup = null; recordPlay();
   }
+}
+/// トスミス時のあげ先選択（name=nullの場合はあげ先なしで記録）
+function pickTossMissCombo(name){
+  state.tossReturnedChoice = 'miss'; state.tossReturnCombo = name || null; state.tossPopup = null; recordPlay();
 }
 function pickTossReturnCombo(name){
   state.tossReturnCombo = name; state.tossPopup = null; recordPlay();
