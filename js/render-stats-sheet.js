@@ -19,7 +19,7 @@ function statsRowsHtml(rows, opts){
           <th rowspan="2" class="name-cell">選手名</th>
           ${hasParticipation?'<th rowspan="2">出場形態</th>':''}
           <th rowspan="2">セット数</th>
-          <th colspan="${career?6:4}" class="cat-th cat-border">スパイク</th>
+          <th colspan="${career?6:5}" class="cat-th cat-border">スパイク</th>
           <th colspan="4" class="cat-th cat-border">サーブ</th>
           <th colspan="3" class="cat-th cat-border">キャッチ</th>
           <th colspan="4" class="cat-th cat-border">レシーブ</th>
@@ -28,10 +28,10 @@ function statsRowsHtml(rows, opts){
           <th rowspan="2">総失点</th>
         </tr>
         <tr>
-          <th class="cat-border">本数</th>${career?'<th>決定数</th>':''}<th>決定率</th>${career?'<th>セット平均</th>':''}<th>ミス</th><th>被ブロック</th>
+          <th class="cat-border">本数</th><th>決定数</th><th>決定率</th>${career?'<th>セット平均</th>':''}<th>ミス</th><th>被ブロック</th>
           <th class="cat-border">本数</th><th>エース</th><th>効果率</th><th>ミス</th>
           <th class="cat-border">本数</th><th>成功率</th><th>ミス</th>
-          <th class="cat-border">総レシーブ数</th><th>強打レシーブ数</th><th>成功率</th><th>ミス</th>
+          <th class="cat-border">本数</th><th>強打数</th><th>返球率</th><th>ミス</th>
           <th class="cat-border">決定本数</th><th>タッチ数</th><th>BO数</th>
         </tr>
       </thead>
@@ -40,10 +40,10 @@ function statsRowsHtml(rows, opts){
           <td>${r.player.number}</td><td class="name-cell">${esc(r.player.name)}</td>
           ${hasParticipation?`<td>${esc(r.participationType||'-')}</td>`:''}
           <td>${r.setsParticipated}</td>
-          <td class="cat-border">${r.spikeOverall.total}</td>${career?`<td>${r.spikeOverall.decided}</td>`:''}<td>${pct(r.spikeOverall.decisionRate)}</td>${career?`<td>${num(r.spikeOverall.perSet,2)}</td>`:''}<td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
+          <td class="cat-border">${r.spikeOverall.total}</td><td>${r.spikeOverall.decided}</td><td>${pct(r.spikeOverall.decisionRate)}</td>${career?`<td>${num(r.spikeOverall.perSet,2)}</td>`:''}<td>${r.spikeOverall.miss}</td><td>${r.spikeOverall.blocked}</td>
           <td class="cat-border">${r.serve.total}</td><td>${r.serve.decided}</td><td>${pct(r.serve.effectiveRate)}</td><td>${r.serve.miss}</td>
           <td class="cat-border">${r.serveReceiveOverall.total}</td><td>${pct(r.serveReceiveOverall.successRate)}</td><td>${r.serveReceiveOverall.miss}</td>
-          <td class="cat-border">${r.receiveOverall.total}</td><td>${r.receiveOverall.hardHit.total}</td><td>${pct(r.receiveOverall.hardHit.successRate)}</td><td>${r.receiveOverall.miss}</td>
+          <td class="cat-border">${r.receiveOverall.total}</td><td>${r.receiveOverall.hardHit.total}</td><td>${pct(r.receiveOverall.hardHit.returnRate)}</td><td>${r.receiveOverall.miss}</td>
           <td class="cat-border">${r.block.decided}</td><td>${r.block.touch}</td><td>${r.block.blockOut}</td>
           <td class="cat-border">${r.totalPoints||0}</td>
           <td>${r.lossOfPoint ? r.lossOfPoint.totalLoss : 0}</td>
@@ -52,7 +52,7 @@ function statsRowsHtml(rows, opts){
     </table>
   </div>
   ${hasParticipation ? '<p class="muted" style="font-size:11px;margin-top:6px;">出場形態：S1〜S6はスタメンの開始ポジション、L1/L2はリベロ、MCは途中出場（メンバーチェンジ）</p>' : ''}
-  <p class="muted" style="font-size:11px;margin-top:4px;">レシーブの成功率＝強打レシーブのA・B・Cパス数÷強打レシーブ数　BO数＝ブロックアウト本数　総得点＝スパイク決定・サーブエース・ブロック決定の合計　総失点＝サーブミス・キャッチミス・スパイクミス・ブロックアウト・失点タブでの記録の合計</p>`;
+  <p class="muted" style="font-size:11px;margin-top:4px;">レシーブの返球率＝（強打のA×100＋B×50＋C×25－ミス×100）÷強打の受数　BO数＝ブロックアウト本数　総得点＝スパイク決定・サーブエース・ブロック決定の合計　総失点＝サーブミス・キャッチミス・スパイクミス・トスミス・ブロックアウト・失点タブでの記録の合計</p>`;
 }
 
 /* ==================== 選手の詳細成績（全項目）ドリルダウン ==================== */
@@ -156,7 +156,7 @@ function renderPlayerDetailOverlay(){
     body += receiveRowHtml(s.receiveOverall);
     if (s.receiveOverall.hardHit && s.receiveOverall.hardHit.total>0){
       const h = s.receiveOverall.hardHit;
-      body += statCard(`<div style="font-weight:700;margin-bottom:4px;">強打</div>${statLine('強打の総受数', h.total)}${statLine('成功数（A+B+C）', h.success)}${statLine('強打成功率', pct(h.successRate))}`);
+      body += statCard(`<div style="font-weight:700;margin-bottom:4px;">強打</div>${statLine('強打の受数', h.total)}${statLine('Aパス', h.aPass)}${statLine('Bパス', h.bPass)}${statLine('Cパス', h.cPass)}${statLine('ミス数', h.miss)}${statLine('強打返球率', pct(h.returnRate))}`);
     }
     if (s.receiveByType.length){
       body += `<div class="muted" style="font-size:12px;margin-bottom:4px;">相手攻撃種類別</div>`;
@@ -209,7 +209,7 @@ function teamAggregateRowsHtml(agg, opponentErrors){
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">キャッチ成功率</span><strong>${pct(agg.catchRate)}</strong></div>
-    <div class="row" style="justify-content:space-between;"><span class="muted">レシーブ（強打）成功率</span><strong>${pct(agg.receiveRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">レシーブ（強打）返球率</span><strong>${pct(agg.receiveRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">ブロック</span><strong>${agg.totalBlocks}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブミス</span><strong>${agg.serveMiss}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイクミス</span><strong>${agg.spikeMiss}</strong></div>
@@ -226,7 +226,7 @@ function teamRatesOnlyHtml(agg){
     <div class="row" style="justify-content:space-between;"><span class="muted">スパイク決定率</span><strong>${pct(agg.spikeRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">サーブ効果率</span><strong>${pct(agg.serveRate)}</strong></div>
     <div class="row" style="justify-content:space-between;"><span class="muted">キャッチ成功率</span><strong>${pct(agg.catchRate)}</strong></div>
-    <div class="row" style="justify-content:space-between;"><span class="muted">レシーブ（強打）成功率</span><strong>${pct(agg.receiveRate)}</strong></div>
+    <div class="row" style="justify-content:space-between;"><span class="muted">レシーブ（強打）返球率</span><strong>${pct(agg.receiveRate)}</strong></div>
   </div>`;
 }
 

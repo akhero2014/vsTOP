@@ -50,7 +50,7 @@ function positionCircleHtml(team, index){
     <button class="pos-circle ${team==='away'?'away':''} ${setterCls} ${isSelected?'selected':''} ${!player?'empty':''} ${isServeReceiverHighlight?'serve-receiver':''}"
       ${disabled?'disabled style="opacity:.5"':''} onclick="selectCourtPlayer('${team}','${player?player.id:''}')">
       <div class="circ" style="${circStyle}">
-        ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
+        ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,4))}</span>` : '-'}
       </div>
       <div class="lab">S${index+1}</div>
     </button>`;
@@ -68,7 +68,7 @@ function liberoBadgeHtml(team, index, label){
     <button class="pos-circle ${team==='away'?'away':''} ${isSelected?'selected':''} ${!player?'empty':''}"
       style="width:44px" ${disabled?'disabled style="opacity:.5"':''} onclick="selectCourtPlayer('${team}','${player?player.id:''}')">
       <div class="circ" style="width:40px;height:40px;${circStyle}">
-        ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,2))}</span>` : '-'}
+        ${player ? `<span class="circ-num">${player.number}</span><span class="circ-name">${esc(player.name.slice(0,4))}</span>` : '-'}
       </div>
       <div class="lab">${label}</div>
     </button>`;

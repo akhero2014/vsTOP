@@ -10,14 +10,14 @@ function csvEscape(text){
 function fmt(v, digits){ return v===null||v===undefined ? '' : v.toFixed(digits===undefined?1:digits); }
 
 function simpleStatsCSV(rows, filename){
-  const lines = ['#,選手名,セット数,スパイク本数,スパイク決定数,スパイク決定率(%),セット平均決定本数,スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチ成功率(%),キャッチミス,総レシーブ数,強打レシーブ数,強打レシーブ成功率(%),レシーブミス,ブロック決定本数,タッチ数,BO数,総得点,総失点'];
+  const lines = ['#,選手名,セット数,スパイク本数,スパイク決定数,スパイク決定率(%),セット平均決定本数,スパイクミス,被ブロック数,サーブ本数,サーブ効果率(%),サーブミス,キャッチ本数,キャッチ成功率(%),キャッチミス,本数,強打レシーブ数,強打返球率,レシーブミス,ブロック決定本数,タッチ数,BO数,総得点,総失点'];
   for (const r of rows){
     lines.push([
       r.player.number, csvEscape(r.player.name), r.setsParticipated,
       r.spikeOverall.total, r.spikeOverall.decided, fmt(r.spikeOverall.decisionRate), fmt(r.spikeOverall.perSet,2), r.spikeOverall.miss, r.spikeOverall.blocked,
       r.serve.total, fmt(r.serve.effectiveRate), r.serve.miss,
       r.serveReceiveOverall.total, fmt(r.serveReceiveOverall.successRate), r.serveReceiveOverall.miss,
-      r.receiveOverall.total, r.receiveOverall.hardHit.total, fmt(r.receiveOverall.hardHit.successRate), r.receiveOverall.miss,
+      r.receiveOverall.total, r.receiveOverall.hardHit.total, fmt(r.receiveOverall.hardHit.returnRate), r.receiveOverall.miss,
       r.block.decided, r.block.touch, r.block.blockOut, r.totalPoints||0, r.lossOfPoint?r.lossOfPoint.totalLoss:0,
     ].join(','));
   }
@@ -259,8 +259,8 @@ function detailedMatchCSV(match, playerName, side){
     out += recs.length+','+recs.filter(e=>e.resultLabel==='Aパス').length+','+recs.filter(e=>e.resultLabel==='Bパス').length+','+recs.filter(e=>e.resultLabel==='Cパス').length+',\n\n';
     const hard = recs.filter(e=>e.opponentAttackType==='強打');
     if (hard.length){
-      out += '【レシーブ（強打）】\n強打の総受数,強打のA+B+Cパス数,強打成功率\n';
-      out += hard.length+','+hard.filter(e=>['Aパス','Bパス','Cパス'].includes(e.resultLabel)).length+',\n\n';
+      out += '【レシーブ（強打）】\n強打の受数,強打のAパス数,強打のBパス数,強打のCパス数,強打のミス数,強打返球率\n';
+      out += hard.length+','+hard.filter(e=>e.resultLabel==='Aパス').length+','+hard.filter(e=>e.resultLabel==='Bパス').length+','+hard.filter(e=>e.resultLabel==='Cパス').length+','+hard.filter(e=>e.resultLabel==='ミス').length+',\n\n';
     }
     const types = [...new Set(recs.map(e=>e.opponentAttackType).filter(Boolean))].sort();
     if (types.length){
@@ -311,7 +311,7 @@ function buildPlayerCsvForMatches(matches, name, teamName){
     if (section){ matchNum++; body += '【第'+matchNum+'試合】\n'+section; }
   });
   if (!body) return null;
-  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\nキャッチ成功率,"((Aパス数×100)+(Bパス数×50))÷総受数"\nレシーブ強打成功率,"(強打のAパス数+Bパス数+Cパス数)÷強打の総受数"\nセットあたりのアタック決定本数,"スパイク決定本数÷セット数"\n';
+  body += '【計算式】\n項目,計算式\nサーブ効果率,"((サーブ決定本数×100)+(サーブ効果本数×25)-(サーブミス数×25))÷サーブ総数"\nキャッチ成功率,"((Aパス数×100)+(Bパス数×50))÷総受数"\nレシーブ強打返球率,"((強打のAパス数×100)+(強打のBパス数×50)+(強打のCパス数×25)-(強打のミス数×100))÷強打の受数"\nセットあたりのアタック決定本数,"スパイク決定本数÷セット数"\n';
   return body;
 }
 

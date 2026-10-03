@@ -106,13 +106,6 @@ function printSelectedAggregate(teamName){
 
   const pages = [];
 
-  const spikePlayers = players.filter(p=>p.spikeOverall.total>0)
-    .sort((a,b)=>(b.spikeOverall.decisionRate??-1)-(a.spikeOverall.decisionRate??-1));
-  const servePlayers = players.filter(p=>p.serve.total>0)
-    .sort((a,b)=>(b.serve.effectiveRate??-1)-(a.serve.effectiveRate??-1));
-  const catchPlayers = players.filter(p=>p.serveReceiveOverall.total>0)
-    .sort((a,b)=>(b.serveReceiveOverall.successRate??-1)-(a.serveReceiveOverall.successRate??-1));
-
   const lossEventsForPdf = [];
   matches.forEach(m=>{
     const side = sideForTeamInMatch(m, teamName);
@@ -128,7 +121,7 @@ function printSelectedAggregate(teamName){
       <tr><td>スパイク決定率</td><td>${pct(agg.spikeRate)}</td></tr>
       <tr><td>サーブ効果率</td><td>${pct(agg.serveRate)}</td></tr>
       <tr><td>キャッチ成功率</td><td>${pct(agg.catchRate)}</td></tr>
-      <tr><td>レシーブ（強打）成功率</td><td>${pct(agg.receiveRate)}</td></tr>
+      <tr><td>レシーブ（強打）返球率</td><td>${pct(agg.receiveRate)}</td></tr>
       <tr><td>ブロック</td><td>${agg.totalBlocks}</td></tr>
       <tr><td>サーブミス</td><td>${agg.serveMiss}</td></tr>
       <tr><td>スパイクミス</td><td>${agg.spikeMiss}</td></tr>
@@ -142,33 +135,18 @@ function printSelectedAggregate(teamName){
       <tr><td>${lossBreakdownForPdf.反則}</td><td>${lossBreakdownForPdf.レシーブミス}</td><td>${lossBreakdownForPdf.連携ミス.length}</td></tr>
     </table>` : ''}
   `);
-  if (spikePlayers.length){
+  // ランキングページ：アプリの「ランキング」タブと同じ項目（総合）を、タブの並び順で出力する
+  RANKING_TABS.forEach(([key])=>{
+    const def = rankingDefFor(key, players);
+    if (!def.rows.length) return;
+    const sorted = def.rows.slice().sort((x,y)=>(y.primaryValue===null?-1:y.primaryValue)-(x.primaryValue===null?-1:x.primaryValue));
     pages.push(`
-    <h2>スパイク（総合・決定率順）</h2>
+    <h2>ランキング：${esc(def.title)}（${esc(def.metric)}順）</h2>
     <table>
-      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>ミス</th><th>被ブロック</th><th>決定率</th></tr>
-      ${spikePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
-        <td>${p.spikeOverall.total}</td><td>${p.spikeOverall.decided}</td><td>${p.spikeOverall.miss}</td><td>${p.spikeOverall.blocked}</td><td>${pct(p.spikeOverall.decisionRate)}</td></tr>`).join('')}
+      <tr><th>順位</th><th>#</th><th>選手名</th><th>${esc(def.metric)}</th><th>内訳</th></tr>
+      ${sorted.map((r,i)=>`<tr><td>${i+1}</td><td>${r.number??''}</td><td>${esc(r.name)}</td><td>${esc(r.primaryText)}</td><td>${esc(r.detail||'')}</td></tr>`).join('')}
     </table>`);
-  }
-  if (servePlayers.length){
-    pages.push(`
-    <h2>サーブ（総合・効果率順）</h2>
-    <table>
-      <tr><th>#</th><th>選手名</th><th>総数</th><th>決定</th><th>効果</th><th>ミス</th><th>効果率</th></tr>
-      ${servePlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
-        <td>${p.serve.total}</td><td>${p.serve.decided}</td><td>${p.serve.effective}</td><td>${p.serve.miss}</td><td>${pct(p.serve.effectiveRate)}</td></tr>`).join('')}
-    </table>`);
-  }
-  if (catchPlayers.length){
-    pages.push(`
-    <h2>キャッチ（総合・成功率順）</h2>
-    <table>
-      <tr><th>#</th><th>選手名</th><th>総数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>成功率</th></tr>
-      ${catchPlayers.map(p=>`<tr><td>${p.player.number}</td><td>${esc(p.player.name)}</td>
-        <td>${p.serveReceiveOverall.total}</td><td>${p.serveReceiveOverall.aPass}</td><td>${p.serveReceiveOverall.bPass}</td><td>${p.serveReceiveOverall.cPass}</td><td>${p.serveReceiveOverall.miss}</td><td>${pct(p.serveReceiveOverall.successRate)}</td></tr>`).join('')}
-    </table>`);
-  }
+  });
 
   const validMatches = matches.filter(m=>sideForTeamInMatch(m, teamName));
   for (let i=0; i<validMatches.length; i+=5){
@@ -249,8 +227,8 @@ function printSelectedAggregate(teamName){
       if (p.receiveOverall.hardHit && p.receiveOverall.hardHit.total>0){
         const h = p.receiveOverall.hardHit;
         ph += `<h3>レシーブ（強打）</h3><table>
-          <tr><th>強打の総受数</th><th>成功数（A+B+C）</th><th>強打成功率</th></tr>
-          <tr><td>${h.total}</td><td>${h.success}</td><td>${pct(h.successRate)}</td></tr>
+          <tr><th>強打の受数</th><th>Aパス</th><th>Bパス</th><th>Cパス</th><th>ミス</th><th>強打返球率</th></tr>
+          <tr><td>${h.total}</td><td>${h.aPass}</td><td>${h.bPass}</td><td>${h.cPass}</td><td>${h.miss}</td><td>${pct(h.returnRate)}</td></tr>
         </table>`;
       }
       if (p.receiveByType && p.receiveByType.length){
@@ -342,7 +320,7 @@ function runCsvExportDownloadOnly(teamName){
 
 /* ==================== ランキング ==================== */
 
-function rankingRow(name, primaryValue, primaryText, detail){ return {name, primaryValue, primaryText, detail}; }
+function rankingRow(name, primaryValue, primaryText, detail, number){ return {name, primaryValue, primaryText, detail, number}; }
 
 function renderRankingList(rows, metricLabel){
   const sorted = rows.slice().sort((a,b)=>(b.primaryValue===null?-1:b.primaryValue)-(a.primaryValue===null?-1:a.primaryValue));
@@ -369,6 +347,24 @@ function scopePickerHtml(field, options){
   </select>`;
 }
 
+/// ランキングのタブ一覧（アプリ画面・PDF共通。セット平均決定はスパイクの次）
+const RANKING_TABS = [['spike','スパイク'],['spikePerSet','セット平均決定'],['serve','サーブ'],['catch','キャッチ'],['receive','レシーブ'],['toss','トス'],['block','ブロック'],['points','総得点'],['loss','総失点']];
+
+/// 総合（コンビ・種類の絞り込みなし）で並べたランキング。アプリの各タブとPDFで共用する
+function rankingDefFor(key, all){
+  const R = (list, f)=>list.map(f);
+  if (key==='spike') return { title:'スパイク', metric:'決定率', rows: R(all.filter(s=>s.spikeOverall.total>0), s=>rankingRow(s.player.name, s.spikeOverall.decisionRate, pct(s.spikeOverall.decisionRate), `総数${s.spikeOverall.total}　決定${s.spikeOverall.decided}　ミス${s.spikeOverall.miss}　被ブロック${s.spikeOverall.blocked}`, s.player.number)) };
+  if (key==='spikePerSet') return { title:'セット平均決定', metric:'セット平均', rows: R(all.filter(s=>s.spikeOverall.total>0), s=>rankingRow(s.player.name, s.spikeOverall.perSet, num(s.spikeOverall.perSet,2), `決定${s.spikeOverall.decided}　セット数${s.setsParticipated}`, s.player.number)) };
+  if (key==='serve') return { title:'サーブ', metric:'効果率', rows: R(all.filter(s=>s.serve.total>0), s=>rankingRow(s.player.name, s.serve.effectiveRate, pct(s.serve.effectiveRate), `総数${s.serve.total}　決定${s.serve.decided}　効果${s.serve.effective}　ミス${s.serve.miss}`, s.player.number)) };
+  if (key==='catch') return { title:'キャッチ', metric:'成功率', rows: R(all.filter(s=>s.serveReceiveOverall.total>0), s=>{ const t=s.serveReceiveOverall; return rankingRow(s.player.name, t.successRate, pct(t.successRate), `総数${t.total}　A${t.aPass}　B${t.bPass}　C${t.cPass}　ミス${t.miss}`, s.player.number); }) };
+  if (key==='receive') return { title:'レシーブ（強打）', metric:'強打返球率', rows: R(all.filter(s=>s.receiveOverall.hardHit.total>0), s=>{ const h=s.receiveOverall.hardHit; return rankingRow(s.player.name, h.returnRate, pct(h.returnRate), `強打受数${h.total}　A${h.aPass}　B${h.bPass}　C${h.cPass}　ミス${h.miss}`, s.player.number); }) };
+  if (key==='toss') return { title:'トス', metric:'成功率', rows: R(all.filter(s=>s.toss.total>0), s=>rankingRow(s.player.name, s.toss.successRate, pct(s.toss.successRate), `本数${s.toss.total}　成功${s.toss.success}　失敗${s.toss.failure}　ミス${s.toss.miss}`, s.player.number)) };
+  if (key==='block') return { title:'ブロック', metric:'セットあたり', rows: R(all.filter(s=>s.block.decided>0), s=>rankingRow(s.player.name, s.block.perSet, num(s.block.perSet,2), `決定本数${s.block.decided}　タッチ${s.block.touch}　BO${s.block.blockOut}　セット数${s.block.setsPlayed}`, s.player.number)) };
+  if (key==='points') return { title:'総得点', metric:'総得点', rows: R(all.filter(s=>s.totalPoints>0), s=>rankingRow(s.player.name, s.totalPoints, String(s.totalPoints), `スパイク${s.spikeOverall.decided}　サーブ${s.serve.decided}　ブロック${s.block.decided}`, s.player.number)) };
+  if (key==='loss') return { title:'総失点（多い順）', metric:'総失点', rows: R(all.filter(s=>s.lossOfPoint && s.lossOfPoint.totalLoss>0), s=>{ const l=s.lossOfPoint; return rankingRow(s.player.name, l.totalLoss, String(l.totalLoss), `サーブミス${s.serve.miss}　キャッチミス${s.serveReceiveOverall.miss}　スパイクミス${s.spikeOverall.miss}　トスミス${s.toss.miss}　BO${s.block.blockOut}　失点タブ${l.total}`, s.player.number); }) };
+  return { title:'', metric:'', rows:[] };
+}
+
 /// 通算ランキング（自チーム/相手チーム、これまでの全試合を対象）
 function renderRankingsBody(teamName){
   const all = careerDetailedStatsForTeamName(teamName);
@@ -380,7 +376,7 @@ function renderRankingsBody(teamName){
 
 function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackTypesScope){
   const rt = state.rankingsTab || 'spike';
-  const tabs = [['spike','スパイク'],['serve','サーブ'],['catch','キャッチ'],['receive','レシーブ'],['toss','トス'],['block','ブロック'],['spikePerSet','セット平均決定'],['points','総得点']];
+  const tabs = RANKING_TABS;
   let html = `<div class="tabbar" style="margin-bottom:12px;">
     ${tabs.map(([k,label])=>`<button class="${rt===k?'active':''}" onclick="state.rankingsTab='${k}'; render();">${label}</button>`).join('')}
   </div>`;
@@ -409,21 +405,9 @@ function renderRankingsBodyForList(all, combosScope, serveTypesScope, attackType
       return rankingRow(s.player.name, target.successRate, pct(target.successRate), `総数${target.total}　A${target.aPass}　B${target.bPass}　C${target.cPass}`);
     }).filter(Boolean);
     html += renderRankingList(rows, '成功率');
-  } else if (rt==='receive'){
-    // レシーブは強打レシーブ成功率の降順
-    const rows = all.filter(s=>s.receiveOverall.hardHit.total>0).map(s=>{
-      const h = s.receiveOverall.hardHit;
-      return rankingRow(s.player.name, h.successRate, pct(h.successRate), `強打レシーブ数${h.total}　成功${h.success}　ミス${h.miss}`);
-    });
-    html += renderRankingList(rows, '強打成功率');
-  } else if (rt==='spikePerSet'){
-    const rows = all.filter(s=>s.spikeOverall.decided>0 || s.spikeOverall.total>0).map(s=>
-      rankingRow(s.player.name, s.spikeOverall.perSet, num(s.spikeOverall.perSet,2), `決定${s.spikeOverall.decided}　セット数${s.setsParticipated}`));
-    html += renderRankingList(rows, 'セット平均');
-  } else if (rt==='points'){
-    const rows = all.filter(s=>s.totalPoints>0).map(s=>
-      rankingRow(s.player.name, s.totalPoints, String(s.totalPoints), `スパイク${s.spikeOverall.decided}　サーブ${s.serve.decided}　ブロック${s.block.decided}`));
-    html += renderRankingList(rows, '総得点');
+  } else if (rt==='receive' || rt==='spikePerSet' || rt==='points' || rt==='loss'){
+    const def = rankingDefFor(rt, all);
+    html += renderRankingList(def.rows, def.metric, def.ascending);
   } else if (rt==='toss'){
     const rows = all.filter(s=>s.toss.total>0).map(s=>
       rankingRow(s.player.name, s.toss.successRate, pct(s.toss.successRate), `本数${s.toss.total}　成功${s.toss.success}　失敗${s.toss.failure}　ミス${s.toss.miss}`));

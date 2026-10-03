@@ -241,6 +241,8 @@ function recordPlay(){
   const wasServe = state.selectedPlayType==='serve';
   const wasServeReceive = state.selectedPlayType==='serveReceive';
   const wasToss = state.selectedPlayType==='toss';
+  const wasReceive = state.selectedPlayType==='receive';
+  const wasBlockTouch = state.selectedPlayType==='block' && state.selectedResult==='タッチ';
   if (wasServe) state.serveReceiveRecorded = false;
   if (wasServeReceive) state.serveReceiveRecorded = true;
 
@@ -263,7 +265,18 @@ function recordPlay(){
     // 相手コートへ返球された場合は、その後の自チームのプレーは続かないため遷移せず選択のみ戻す
     state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null;
   }
-  else if (wasServe || wasServeReceive || wasToss){
+  else if (wasServeReceive || wasReceive){
+    // キャッチ・レシーブの後は、トスタブが表示されていればトスに、無ければ右隣のタブに自動遷移する
+    const next = visiblePlayTypes().includes('toss') ? 'toss' : nextVisiblePlayType(originalPlayType);
+    if (next) selectPlayType(next);
+    else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
+  }
+  else if (wasBlockTouch){
+    // ブロックのタッチの後は、レシーブタブが表示されていればレシーブに自動遷移する
+    if (visiblePlayTypes().includes('receive')) selectPlayType('receive');
+    else { state.selectedResult=null; state.selectedCourse=null; state.selectedSubType=null; state.selectedCombo=null; }
+  }
+  else if (wasServe || wasToss){
     // 得点にならなかった場合は、その時点で表示されているタブの「右側（次）」に自動遷移する。
     // 選手の自動選択は、遷移先タブそれぞれのルール（selectPlayType内）にそのまま従う。
     const next = nextVisiblePlayType(originalPlayType);

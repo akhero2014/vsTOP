@@ -76,12 +76,16 @@ function computeDetailedStats(events, setsPlayed, player){
 
   const recs = events.filter(e=>e.playType==='receive');
   const recOverall = receiveStats(recs, '総合');
-  // 強打の成功率＝（強打のA＋B＋Cパス数）÷強打の総受数
+  // 強打の返球率の集計
   const hardRecs = recs.filter(e=>e.opponentAttackType==='強打');
   const hardTotal = hardRecs.length;
-  const hardOk = hardRecs.filter(e=>['Aパス','Bパス','Cパス'].includes(e.resultLabel)).length;
-  recOverall.hardHit = { total:hardTotal, success:hardOk, miss:hardRecs.filter(e=>e.resultLabel==='ミス').length,
-    successRate: hardTotal>0 ? hardOk/hardTotal*100 : null };
+  const hA = hardRecs.filter(e=>e.resultLabel==='Aパス').length;
+  const hB = hardRecs.filter(e=>e.resultLabel==='Bパス').length;
+  const hC = hardRecs.filter(e=>e.resultLabel==='Cパス').length;
+  const hMiss = hardRecs.filter(e=>e.resultLabel==='ミス').length;
+  // 強打の返球率＝（A×100＋B×50＋C×25－ミス×100）÷強打の受数
+  recOverall.hardHit = { total:hardTotal, aPass:hA, bPass:hB, cPass:hC, miss:hMiss,
+    returnRate: hardTotal>0 ? (hA*100 + hB*50 + hC*25 - hMiss*100)/hardTotal : null };
   const attackTypes = [...new Set(recs.map(e=>e.opponentAttackType).filter(Boolean))].sort();
   const recByType = attackTypes.map(t=>receiveStats(recs.filter(e=>e.opponentAttackType===t), t));
 
@@ -105,7 +109,7 @@ function computeDetailedStats(events, setsPlayed, player){
   };
   // 総失点：失点タブでの記録（反則/レシーブミス/連携ミス/その他）に加えて、
   // サーブミス・キャッチミス・スパイクミスも合算した「この選手が絡んだ失点の合計」
-  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut;
+  lossOfPointV.totalLoss = lossOfPointV.total + serveStatsV.miss + srOverall.miss + spikeOverall.miss + blockStatsV.blockOut + tossStatsV.miss;
 
   // 総得点：この選手自身の得点になったプレー（スパイク決定・サーブエース・ブロック決定）
   const totalPoints = events.filter(e=>e.outcome==='acting' && e.playType!=='lossOfPoint').length;
@@ -321,13 +325,13 @@ function aggregateFromPlayerList(list){
   const spike = list.reduce((s,p)=>({total:s.total+p.spikeOverall.total, decided:s.decided+p.spikeOverall.decided, miss:s.miss+p.spikeOverall.miss, blocked:s.blocked+p.spikeOverall.blocked}), {total:0,decided:0,miss:0,blocked:0});
   const serve = list.reduce((s,p)=>({total:s.total+p.serve.total, decided:s.decided+p.serve.decided, effective:s.effective+p.serve.effective, miss:s.miss+p.serve.miss}), {total:0,decided:0,effective:0,miss:0});
   const rec = list.reduce((s,p)=>({total:s.total+p.serveReceiveOverall.total, aPass:s.aPass+p.serveReceiveOverall.aPass, bPass:s.bPass+p.serveReceiveOverall.bPass, miss:s.miss+p.serveReceiveOverall.miss}), {total:0,aPass:0,bPass:0,miss:0});
-  const hard = list.reduce((s,p)=>({total:s.total+p.receiveOverall.hardHit.total, success:s.success+p.receiveOverall.hardHit.success}), {total:0,success:0});
+  const hard = list.reduce((s,p)=>{ const h=p.receiveOverall.hardHit; return {total:s.total+h.total, a:s.a+h.aPass, b:s.b+h.bPass, c:s.c+h.cPass, miss:s.miss+h.miss}; }, {total:0,a:0,b:0,c:0,miss:0});
   const totalBlocks = list.reduce((s,p)=>s+p.block.decided, 0);
   return {
     spikeRate: spike.total>0 ? spike.decided/spike.total*100 : null,
     serveRate: serve.total>0 ? (serve.decided*100+serve.effective*25-serve.miss*25)/serve.total : null,
     catchRate: rec.total>0 ? (rec.aPass*100+rec.bPass*50)/rec.total : null,
-    receiveRate: hard.total>0 ? hard.success/hard.total*100 : null,
+    receiveRate: hard.total>0 ? (hard.a*100+hard.b*50+hard.c*25-hard.miss*100)/hard.total : null,
     totalBlocks,
     serveMiss: serve.miss, spikeMiss: spike.miss, spikeBlocked: spike.blocked, catchMiss: rec.miss,
   };
